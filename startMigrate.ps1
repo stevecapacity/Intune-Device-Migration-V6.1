@@ -15,15 +15,22 @@ Steve Weiner
 Logan Lautt
 Jesse Weimer
 #>
-Param(
-    [Parameter(Mandatory=$false)]
-    [switch]$LogAnalytics
-)
 
 $ErrorActionPreference = "SilentlyContinue"
 
 # Import JSON contents from settings.json
 $settings = Get-Content -Path "$($PSScriptRoot)\settings.json" | ConvertFrom-Json
+
+# Variables from settings.json
+$localPath = $settings.localPath
+$logPath = $settings.logPath
+$clientId = $settings.sourceTenant.clientID
+$clientSecret = $settings.sourceTenant.clientSecret
+$tenant = $settings.sourceTenant.tenantName
+$groupTag = $settings.groupTag
+$regPath = $settings.regPath
+$lockImg1 = $settings.lockScreen.lockScreen1
+$logAnalytics = $settings.logAnalytics.enabled
 
 # Create local path, extract files, and start logging
 $localPath = $settings.localPath
@@ -38,19 +45,19 @@ $installFlag = "$($localPath)\startMigrate.flag"
 New-Item -ItemType File -Force -Path $installFlag
 
 # Start logging
-$LogPath = "$($localPath)\startMigrate.log"
+$log = "$($logPath)\startMigrate.log"
 $LogTime = Get-Date -Format "MM-dd-yyyy HH:mm:ss"
 $LogMessage = "[$LogTime] Starting startMigrate.ps1"
-Add-Content -Path $LogPath -Value $LogMessage
-Start-Transcript -Path $LogPath -Append -Verbose
+Add-Content -Path $log -Value $LogMessage
+Start-Transcript -Path $log -Append -Verbose
+
+# Create log object for Log Analytics
+$logObject = @()
 
 # Check if running as system
 $context = whoami
 Write-Host "Running as $context"
 $logObject += @{Name="Running as:";Value=$context}
-
-# Create log object
-$logObject = @()
 
 # Authenticate to Graph (source tenant)
 Write-Host "Authenticating to MS Graph..."
@@ -513,12 +520,15 @@ else
 
 Write-Host "StartMigrate process complete... shutting down in 30 seconds"
 
+Stop-Transcript
+
 # Post to log analytics if enabled
-if($LogAnalytics)
+$logAnalytics = $settings.logAnalytics
+if($LogAnalytics -eq "enabled")
 {
     $logInfo = New-Object System.Object
     $CustomerId = $settings.workspaceID  
-    $SharedKey = $settings.primaryKey
+    $SharedKey = $settings.sharedKey
     $LogType = "startMigrate"
     $TimeStampField = ""
     foreach($object in $logObject)

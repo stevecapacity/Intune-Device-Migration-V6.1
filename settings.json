@@ -1,5 +1,6 @@
 {
     "localPath":"C:\\ProgramData\\IntuneMigration",
+    "logPath":"C:\\ProgramData\\Microsoft\\IntuneManagementExtension\\Logs",
     "sourceTenant": {
         "clientID":"<sourceClientID>",
         "clientSecret":"<sourceClientSecret>",
@@ -11,10 +12,16 @@
         "tenantName":"<targetTenantName>",
         "tenantID":"<targetTenantID>"
     },
-    "workspaceID":"<workspaceID>",
-    "primaryKey":"<primaryKey>",
+    "logAnalytics":{
+        "enabled":"<true/false>",
+        "workspaceID":"<workspaceID>",
+        "sharedKey":"<sharedKey>"
+    },
     "groupTag":"",
     "regPath":"HKLM\\SOFTWARE\\IntuneMigration",
-    "lockScreen1":"<lockScreen1.png>",
-    "lockScreen2":"<lockScreen2.png>"
+    "lockSceen":{
+        "lockScreen1":"<lockScreen1.png>",
+        "lockScreen2":"<lockScreen2.png>"
+    },
+    "bitlockerMethod":"<MIGRATE/DECRYPT>"
 }
