@@ -160,7 +160,7 @@ $groupTag = $settings.groupTag
 if($groupTag -eq "")
 {
     Write-Host "No group tag specified- try to get from source tenant Autopilot object..."
-    $logObject += @{Name="Group Tag:";Value="NOT SPECIFIED"}
+    $logObject += @{Name="Group Tag from JSON:";Value="NOT SPECIFIED"}
     try 
     {
         $groupTag = $autopilotObject.value.groupTag
@@ -177,7 +177,7 @@ if($groupTag -eq "")
 else
 {
     Write-Host "Group Tag: $groupTag"
-    $logObject += @{Name="Group Tag:";Value=$groupTag}
+    $logObject += @{Name="Group Tag from JSON:";Value=$groupTag}
 }
 
 # Write values to registry
