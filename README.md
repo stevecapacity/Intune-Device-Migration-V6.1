@@ -5,6 +5,15 @@
 
  The migration solution has now been updated to not require any transfer of files from the original user profile to the new user.
 
+ ## User data
+ The updated process for preserving the user profile is as follows:
+ - During *startMigrate.ps1*, the **original user** SID is captured and stored in the registry.
+ - After device leaves source tenant and signs into destination tenant, the **new user** SID is captured and stored in the registry
+ - In the final reboot (*finalBoot.ps1*), the follow actions take place
+    - **New user** profile Cim Instance is deleted
+    - **Original user** profile is edited via Invoke-Method on the Cim Instance to change the owner to the **new user** SID
+    - Registry cleanup is performed to remove cached instances of the **original user** UPN, email address, and logon info from cache
+
 
 ## Settings JSON
 The following variables are now set in the **settings.json** file.
@@ -34,6 +43,26 @@ The following variables are now set in the **settings.json** file.
     * *Target tenant domain name*
 * **$tenantID**:
     * *Target tenant ID*
+
+**$logAnalytics**
+* **$enabled**:
+    * *Enables or disables the use of Log Analytics workspace (TRUE/FALSE)*  
+* **$workspaceID**:
+    * *(If using Log Analytics option) Client ID for Log Analytics workspace*
+* **$sharedKey**:
+    * *(If using Log Analytics option) Authentication secret for Log Analaytics workspace*
+
+**$groupTag**:
+* *Specify Group Tag to be used in destination tenant with Autopilot.  If using an existing tag in the source tenant, leave blank*
+
+**$lockScreen**
+* **$lockScreen1**:
+    * *PNG or JPG file to be displayed once device leaves source tenant.  This should contain IT helpdesk contact info*
+* **$lockScreen2**:
+    * *PNG or JPG file of corporate lock screen to be shown once migration completes*
+
+**$bitlockerMethod**:
+* *Specifies method for managing Bitlocker migration (MIGRATE/DECRYPT)*
 
 **$regPath**:
 * *Registry path needed to write local migration attributes to.  It is recommended to keep this as the default **HKLM\SOFTWARE\IntuneMigration***

@@ -121,7 +121,7 @@ if($useGroupTag -eq $true)
     Write-Host "Updating device group tag..."
     $logObject += @{Name="Use Group Tag:";Value=$useGroupTag}
     $physicalIds = $aadDeviceId.value.$physicalIds
-    $groupTag = "[Order]:$($groupTag)"
+    $groupTag = "[OrderID]:$($groupTag)"
     $physicalIds += $groupTag
 
     $body = @{
@@ -248,7 +248,7 @@ if($LogAnalytics)
 {
     $logInfo = New-Object System.Object
     $CustomerId = $settings.workspaceID  
-    $SharedKey = $settings.primaryKey
+    $SharedKey = $settings.sharedKey
     $LogType = "startMigrate"
     $TimeStampField = ""
     foreach($object in $logObject)
