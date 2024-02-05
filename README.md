@@ -1,9 +1,9 @@
 # Intune Device Migration V6
  V6 (Removes need for profile migration)
 
- Intune tenant-to-tenant device migration V3 adds the capability of operating off of one, settings file that is modified so that the solution code can remain untouched.
+ Intune Intune device migration V6 is available now.
 
- The migration solution has now been updated to not require any transfer of files from the original user profile to the new user.
+ The migration solution has now been updated to not require any transfer of files from the original user profile to the new user, along with other improvements.
 
  ## User data
  The updated process for preserving the user profile is as follows:
@@ -14,16 +14,23 @@
     - **Original user** profile is edited via Invoke-Method on the Cim Instance to change the owner to the **new user** SID
     - Registry cleanup is performed to remove cached instances of the **original user** UPN, email address, and logon info from cache
 
+## BitLocker method
+In the *settings.json*, you can set whether BitLocker migrates the key to target tenant or starts a decryption for new policy.
 
 ## Settings JSON
 The following variables are now set in the **settings.json** file.
 
+## Logging
+Logs are now stored in "C:\ProgramData\Microsoft\IntuneManagementExtension\Logs" so they can be exported from Intune.
 
 ### Required variables
 > Because the settings file is in JSON format, backslashes must be doubled to avoid issues.  For example, ***C:\ProgramData\IntuneMigration*** will be written as ***C:\\\\ProgramData\\\\IntuneMigration***.  Don't worry as they will output correctly into the PowerShell code.
 
 **$localPath**:
 * *This is the local path that all working files will be stored on within the client machine.  It is recommended to keep this as the default **C:\ProgramData\IntuneMigration***
+
+**$logPath**:
+* *This is the default Intune Management Extension log directory.  The migration solution will write all logs here so they can be remotely captured with Intune.*
 
 **$sourceTenant**
 * **$clientID**:
@@ -43,14 +50,6 @@ The following variables are now set in the **settings.json** file.
     * *Target tenant domain name*
 * **$tenantID**:
     * *Target tenant ID*
-
-**$logAnalytics**
-* **$enabled**:
-    * *Enables or disables the use of Log Analytics workspace (TRUE/FALSE)*  
-* **$workspaceID**:
-    * *(If using Log Analytics option) Client ID for Log Analytics workspace*
-* **$sharedKey**:
-    * *(If using Log Analytics option) Authentication secret for Log Analaytics workspace*
 
 **$groupTag**:
 * *Specify Group Tag to be used in destination tenant with Autopilot.  If using an existing tag in the source tenant, leave blank*
