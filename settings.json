@@ -12,12 +12,7 @@
         "tenantName":"<targetTenantName>",
         "tenantID":"<targetTenantID>"
     },
-    "logAnalytics":{
-        "enabled":"<true/false>",
-        "workspaceID":"<workspaceID>",
-        "sharedKey":"<sharedKey>"
-    },
-    "groupTag":"<SET TAG OR LEAVE EMPTY>",
+    "groupTag":"<ADD GROUP TAG OR LEAVE EMPTY>",
     "regPath":"HKLM\\SOFTWARE\\IntuneMigration",
     "lockSceen":{
         "lockScreen1":"<lockScreen1.png>",
