@@ -65,8 +65,8 @@ $logObject += @{Name="Running as:";Value=$context}
 function copyPackageFiles()
 {
     Param(
-        [string]$sourcePath = "$($PSScriptRoot)",
-        [array]$packageFiles = (Get-ChildItem -Path $sourcePath -Recurse)
+        [array]$packageFiles = @(Get-ChildItem -Path "$($PSScriptRoot)" -Recurse),
+        [string]$localPath = $localPath
     )
     foreach($file in $packageFiles)
     {
@@ -74,7 +74,7 @@ function copyPackageFiles()
         $destination = $localPath
         try
         {
-            Copy-Item -Path $source -Destination $destination -Force
+            Copy-Item -Path $source -Destination $destination -Recurse -Force
             Write-Host "Copied $($file.Name) to $($destination)"
             $logObject += @{Name="Copied $($file.Name) to $($destination):";Value="TRUE"}
         }
