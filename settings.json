@@ -17,7 +17,7 @@
         "workspaceID":"<workspaceID>",
         "sharedKey":"<sharedKey>"
     },
-    "groupTag":"",
+    "groupTag":"<SET TAG OR LEAVE EMPTY>",
     "regPath":"HKLM\\SOFTWARE\\IntuneMigration",
     "lockSceen":{
         "lockScreen1":"<lockScreen1.png>",
