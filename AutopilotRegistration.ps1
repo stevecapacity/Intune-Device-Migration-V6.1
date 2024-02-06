@@ -10,7 +10,8 @@ if(!(Test-Path $localPath))
 }
 
 # Start Logging
-Start-Transcript -Path "$localPath\AutopilotRegistration.log" -Verbose
+$logPath = $settings.logPath
+Start-Transcript -Path "$logPath\AutopilotRegistration.log" -Verbose
 
 # Disable AutopilotRegistration task
 Write-Host "Disabling AutopilotRegistration task..."
