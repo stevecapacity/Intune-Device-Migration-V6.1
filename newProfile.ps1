@@ -10,7 +10,8 @@ if(!(Test-Path $localPath))
 }
 
 # Start Logging
-Start-Transcript -Path "$localPath\newProfile.log" -Verbose
+$logPath = $settings.logPath
+Start-Transcript -Path "$logPath\newProfile.log" -Verbose
 
 # Disable newProfile task
 Write-Host "Disabling newProfile task..."
