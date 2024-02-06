@@ -10,8 +10,7 @@ if(!(Test-Path $localPath))
 }
 
 # Start Logging
-$logPath = $settings.logPath
-Start-Transcript -Path "$logPath\finalBoot.log" -Verbose
+Start-Transcript -Path "$localPath\finalBoot.log" -Verbose
 
 # Disable finalBoot task
 Write-Host "Disabling finalBoot task..."

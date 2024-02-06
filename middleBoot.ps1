@@ -1,7 +1,12 @@
 $settings = Get-Content -Path "$($PSScriptRoot)\settings.json" | ConvertFrom-Json
 
-$logPath = $settings.logPath
-Start-Transcript -Path "$logPath\middleBoot.log" -Verbose
+$localPath = $settings.localPath
+if(!(Test-Path $localPath))
+{
+    mkdir $localPath
+}
+
+Start-Transcript -Path "$localPath\middleBoot.log" -Verbose
 
 # Disable middleBoot task
 Write-Host "Disabling middleBoot task..."

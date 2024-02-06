@@ -12,8 +12,7 @@ if(!(Test-Path $localPath))
 }
 
 # Start Logging
-$logPath = $settings.logPath
-Start-Transcript -Path "$logPath\postMigrate.log" -Verbose
+Start-Transcript -Path "$localPath\postMigrate.log" -Verbose
 
 # Get registry values
 $regPath = $settings.regPath
