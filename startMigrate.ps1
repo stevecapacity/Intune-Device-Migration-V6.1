@@ -99,9 +99,9 @@ Write-Host "Getting device info from Graph..."
 
 # Intune object
 Write-Host "Getting Intune object..."
-try 
+$intuneObject = Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceManagement/managedDevices?`$filter=contains(serialNumber,'$($serialNumber)')" -Headers $headers -Method Get    
+if($intuneObject -ne $null)
 {
-    $intuneObject = Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceManagement/managedDevices?`$filter=contains(serialNumber,'$($serialNumber)')" -Headers $headers -Method Get    
     Write-Host "Intune object found"
     try 
     {
@@ -114,7 +114,7 @@ try
         Write-Host "Error getting Intune ID: $message"
     }
 }
-catch 
+else 
 {
     $message = $_.Exception.Message
     Write-Host "Error getting Intune object: $message"
@@ -122,9 +122,9 @@ catch
 
 # Autopilot object
 Write-Host "Getting Autopilot object..."
-try 
+$autopilotObject = Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities?`$filter=contains(serialNumber,'$($serialNumber)')" -Headers $headers -Method Get
+if($autopilotObject -ne $null)
 {
-    $autopilotObject = Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities?`$filter=contains(serialNumber,'$($serialNumber)')" -Headers $headers -Method Get
     Write-Host "Autopilot object found"
     try 
     {
@@ -137,11 +137,12 @@ try
         Write-Host "Error getting Autopilot ID: $message"
     }
 }
-catch 
+else 
 {
     $message = $_.Exception.Message
     Write-Host "Error getting Autopilot object: $message"
 }
+
 
 # Check for group tag if Autopilot object exists AND if group tag is not already set
 $groupTag = $settings.groupTag
@@ -230,238 +231,238 @@ if($groupTag -ne $null)
     Write-Host "Writing group tag to registry..."
     try 
     {
-        reg.exe add $regPath /v "GroupTag" /t REG_SZ /d "$($groupTag)" /f | Out-Host
-        Write-Host "Group tag written to registry"
-            }
-            catch 
-            {
-                $message = $_.Exception.Message
-                Write-Host "Error writing group tag to registry: $message"
-            }
-        }
-        else
-        {
-            Write-Host "Group tag not found"
-        }
+reg.exe add $regPath /v "GroupTag" /t REG_SZ /d "$($groupTag)" /f | Out-Host
+Write-Host "Group tag written to registry"
+    }
+    catch 
+    {
+        $message = $_.Exception.Message
+        Write-Host "Error writing group tag to registry: $message"
+    }
+}
+else
+{
+    Write-Host "Group tag not found"
+}
 
-        # Ensure Microsoft Account creation policy is enabled
+# Ensure Microsoft Account creation policy is enabled
 
-        $regPath = "HKLM:\SOFTWARE\Microsoft\PolicyManager\current\device\Accounts"
-        $regName = "AllowMicrosoftAccountConnection"
-        $value = 1
+$regPath = "HKLM:\SOFTWARE\Microsoft\PolicyManager\current\device\Accounts"
+$regName = "AllowMicrosoftAccountConnection"
+$value = 1
 
-        $currentRegValue = Get-ItemPropertyValue -Path $regPath -name $regName -ErrorAction SilentlyContinue
+$currentRegValue = Get-ItemPropertyValue -Path $regPath -name $regName -ErrorAction SilentlyContinue
 
-        if ($currentRegValue -eq $value) {
-        	Write-Host "Registry value for AllowMicrosoftAccountConnection is correctly set to $value."
-        }
-        else {
-        	Write-Host "Setting MDM registry value for AllowMicrosoftAccountConnection..."
-        	reg.exe add "HKLM\SOFTWARE\Microsoft\PolicyManager\current\device\Accounts" /v "AllowMicrosoftAccountConnection" /t REG_DWORD /d 1 /f | Out-Host
-        }
+if ($currentRegValue -eq $value) {
+    Write-Host "Registry value for AllowMicrosoftAccountConnection is correctly set to $value."
+}
+else {
+    Write-Host "Setting MDM registry value for AllowMicrosoftAccountConnection..."
+    reg.exe add "HKLM\SOFTWARE\Microsoft\PolicyManager\current\device\Accounts" /v "AllowMicrosoftAccountConnection" /t REG_DWORD /d 1 /f | Out-Host
+}
 
-        <#===============================================================================================#>
-        # Only show OTHER USER option after reboot
-        Write-Host "Turning off Last Signed-In User Display...."
-        try {
-        	Set-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name dontdisplaylastusername -Value 1 -Type DWORD -Force
-        	Write-Host "Enabled Interactive Logon policy"
-        } 
-        catch {
-        	Write-Host "Failed to enable policy"
-        }
+<#===============================================================================================#>
+# Only show OTHER USER option after reboot
+Write-Host "Turning off Last Signed-In User Display...."
+try {
+    Set-ItemProperty -Path "HKLM:\Software\Microsoft\Windows\CurrentVersion\Policies\System" -Name dontdisplaylastusername -Value 1 -Type DWORD -Force
+    Write-Host "Enabled Interactive Logon policy"
+} 
+catch {
+    Write-Host "Failed to enable policy"
+}
 
 
-        # Remove MDM certificate
-        Write-Host "Removing MDM Certificate..."
-        Get-ChildItem -Path 'Cert:\LocalMachine\My' | Where-Object {$_.Issuer -match "Microsoft Intune MDM Device CA"} | Remove-Item -Force
-        Write-Host "MDM Certificate removed"
+# Remove MDM certificate
+Write-Host "Removing MDM Certificate..."
+Get-ChildItem -Path 'Cert:\LocalMachine\My' | Where-Object {$_.Issuer -match "Microsoft Intune MDM Device CA"} | Remove-Item -Force
+Write-Host "MDM Certificate removed"
 
-        # Remove MDM enrollment entries
-        Write-Host "Removing MDM enrollment entries..."
-        $EnrollmentsPath = "HKLM:\Software\Microsoft\Enrollments\"
-        $ERPath = "HKLM:\Software\Microsoft\Enrollments\"
-        $Enrollments = Get-ChildItem -Path $EnrollmentsPath
-        foreach ($enrollment in $Enrollments) {
-        	$object = Get-ItemProperty Registry::$enrollment
-        	$discovery = $object."DiscoveryServiceFullURL"
-        	if ($discovery -eq "https://enrollment.manage.microsoft.com/enrollmentserver/discovery.svc") {
-        		$enrollPath = $ERPath + $object.PSChildName
-        		Remove-Item -Path $enrollPath -Recurse
-        	}
-        }
+# Remove MDM enrollment entries
+Write-Host "Removing MDM enrollment entries..."
+$EnrollmentsPath = "HKLM:\Software\Microsoft\Enrollments\"
+$ERPath = "HKLM:\Software\Microsoft\Enrollments\"
+$Enrollments = Get-ChildItem -Path $EnrollmentsPath
+foreach ($enrollment in $Enrollments) {
+    $object = Get-ItemProperty Registry::$enrollment
+    $discovery = $object."DiscoveryServiceFullURL"
+    if ($discovery -eq "https://enrollment.manage.microsoft.com/enrollmentserver/discovery.svc") {
+        $enrollPath = $ERPath + $object.PSChildName
+        Remove-Item -Path $enrollPath -Recurse
+    }
+}
 
-        # Remove MDM scheduled tasks
-        Write-Host "Removing MDM scheduled tasks..."
-        $enrollID = $enrollPath.Split("\")[-1]
-        $tasks = Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\$($enrollID)" -ErrorAction SilentlyContinue
-        if($tasks.Count -gt 0)
-        {
-            foreach($task in $tasks)
-            {
-                try 
-                {
-                    Unregister-ScheduledTask -TaskName $task.TaskName -Confirm:$false -ErrorAction SilentlyContinue
-                    Write-Host "MDM scheduled task removed"
-                }
-                catch 
-                {
-                    $message = $_.Exception.Message
-                    Write-Host "Error removing MDM scheduled task: $message"
-                }
-            }
-        }
-        else
-        {
-            Write-Host "No MDM scheduled tasks found"
-        }
-
-        # Set tasks to run after user signs in
-        Write-Host "Setting post migration tasks..."
-
+# Remove MDM scheduled tasks
+Write-Host "Removing MDM scheduled tasks..."
+$enrollID = $enrollPath.Split("\")[-1]
+$tasks = Get-ScheduledTask -TaskPath "\Microsoft\Windows\EnterpriseMgmt\$($enrollID)" -ErrorAction SilentlyContinue
+if($tasks.Count -gt 0)
+{
+    foreach($task in $tasks)
+    {
         try 
         {
-            schtasks.exe /Create /TN "middleBoot" /XML "$($localPath)\middleBoot.xml"
-            Write-Host "middleBoot task set"
+            Unregister-ScheduledTask -TaskName $task.TaskName -Confirm:$false -ErrorAction SilentlyContinue
+            Write-Host "MDM scheduled task removed"
         }
         catch 
         {
             $message = $_.Exception.Message
-            Write-Host "Error setting middleBoot task: $message"
-            Write-Host "Stopping migration process..."
-            Exit 1
+            Write-Host "Error removing MDM scheduled task: $message"
         }
+    }
+}
+else
+{
+    Write-Host "No MDM scheduled tasks found"
+}
 
-        try
+# Set tasks to run after user signs in
+Write-Host "Setting post migration tasks..."
+
+try 
+{
+    schtasks.exe /Create /TN "middleBoot" /XML "$($localPath)\middleBoot.xml"
+    Write-Host "middleBoot task set"
+}
+catch 
+{
+    $message = $_.Exception.Message
+    Write-Host "Error setting middleBoot task: $message"
+    Write-Host "Stopping migration process..."
+    Exit 1
+}
+
+try
+{
+    schtasks.exe /Create /TN "newProfile" /XML "$($localPath)\newProfile.xml"
+    Write-Host "newProfile task set"
+}
+catch 
+{
+    $message = $_.Exception.Message
+    Write-Host "Error setting newProfile task: $message"
+    Write-Host "Stopping migration process..."
+    Exit 1
+}
+
+
+# Set lock screen image
+$lockImg1 = $settings.lockScreen1
+$lockImgPath1 = "$($localPath)\$($lockImg1)"
+
+$lockScreenPath = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP"
+reg.exe add $lockScreenPath /v "LockScreenImagePath" /t REG_SZ /d $lockImgPath1 /f | Out-Host
+reg.exe add $lockScreenPath /v "LockScreenImageUrl" /t REG_SZ /d $lockImgPath1 /f | Out-Host
+reg.exe add $lockScreenPath /v "LockScreenImageStatus" /t REG_DWORD /d 1 /f | Out-Host
+
+# remove device from Azure AD
+Write-Host "Removing device from Azure AD..."
+Start-Process "C:\Windows\System32\dsregcmd.exe" -ArgumentList "/leave"
+Write-Host "Device removed from Azure AD"
+
+# Check for domain join and remove if necessary
+$domainJoin = (dsregcmd /status | Select-String "DomainJoined").ToString().Split(":")[1].Trim()
+if($domainJoin -eq "YES")
+{
+    Write-Host "Computer is domain joined- removing from domain..."
+    $chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_-=+?<>~"
+    $random = 1..16 | ForEach-Object { Get-Random -Maximum $chars.Length } | ForEach-Object { $chars[ $_ ] }
+    $passwordString = -join $random
+    $password = ConvertTo-SecureString -String $passwordString -AsPlainText -Force
+    # try to enable local admin account and set password
+    try
+    {
+        Set-LocalUser -Name "Administrator" -Password $password
+        Get-LocalUser -Name "Administrator" | Enable-LocalUser
+        $cred = New-Object System.Management.Automation.PSCredential ("$hostname\Administrator", $password)
+        Write-Host "Enabled local admin account and set password"
+        try 
         {
-            schtasks.exe /Create /TN "newProfile" /XML "$($localPath)\newProfile.xml"
-            Write-Host "newProfile task set"
+            Remove-Computer -UnjoinDomainCredential $cred -Force -PassThru -Verbose
+            Write-Host "Computer removed from domain"
+            Start-Sleep -Seconds 2
         }
         catch 
         {
             $message = $_.Exception.Message
-            Write-Host "Error setting newProfile task: $message"
+            Write-Host "Error removing computer from domain: $message"
             Write-Host "Stopping migration process..."
             Exit 1
         }
+    }
+    catch
+    {
+        $message = $_.Exception.Message
+        Write-Host "Error enabling local admin account and setting password: $message"
+        Write-Host "Stopping migration process..."
+        Exit 1
+    }
+}
+else
+{
+    Write-Host "Computer is not domain joined"
+}
 
+# Run ppkg to join device to destination tenant
+$ppkg = Get-ChildItem -Path $localPath -Filter *.ppkg -Recurse
+Write-Host "Installing provisioning package..."
+try
+{
+    Install-ProvisioningPackage -PackagePath $ppkg.FullName -QuietInstall -Force
+    Write-Host "Provisioning package installed"
+}
+catch
+{
+    $message = $_.Exception.Message
+    Write-Host "Error installing provisioning package: $message"
+    Exit 1
+}
 
-        # Set lock screen image
-        $lockImg1 = $settings.lockScreen1
-        $lockImgPath1 = "$($localPath)\$($lockImg1)"
+# Delete Intune Object in source tenant
+Write-Host "Deleting Intune object in source tenant..."
+if($intuneID -ne $null)
+{
+    try 
+    {
+        Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceManagement/managedDevices/$($intuneID)" -Headers $headers -Method Delete
+        Write-Host "Intune object deleted"
+        Start-Sleep -Seconds 2
+    }
+    catch 
+    {
+        $message = $_.Exception.Message
+        Write-Host "Error deleting Intune object: $message"
+    }
+}
+else
+{
+    Write-Host "Intune object not found"
+}
 
-        $lockScreenPath = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP"
-        reg.exe add $lockScreenPath /v "LockScreenImagePath" /t REG_SZ /d $lockImgPath1 /f | Out-Host
-        reg.exe add $lockScreenPath /v "LockScreenImageUrl" /t REG_SZ /d $lockImgPath1 /f | Out-Host
-        reg.exe add $lockScreenPath /v "LockScreenImageStatus" /t REG_DWORD /d 1 /f | Out-Host
+# Delete Autopilot object in source tenant
+Write-Host "Deleting Autopilot object in source tenant..."
+if($autopilotID -ne $null)
+{
+    try 
+    {
+        Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities/$($autopilotID)" -Headers $headers -Method Delete
+        Write-Host "Autopilot object deleted"
+        Start-Sleep -Seconds 2
+    }
+    catch 
+    {
+        $message = $_.Exception.Message
+        Write-Host "Error deleting Autopilot object: $message"
+    }
+}
+else
+{
+    Write-Host "Autopilot object not found"
+}
 
-        # remove device from Azure AD
-        Write-Host "Removing device from Azure AD..."
-        Start-Process "C:\Windows\System32\dsregcmd.exe" -ArgumentList "/leave"
-        Write-Host "Device removed from Azure AD"
+Write-Host "StartMigrate process complete... shutting down in 30 seconds"
 
-        # Check for domain join and remove if necessary
-        $domainJoin = (dsregcmd /status | Select-String "DomainJoined").ToString().Split(":")[1].Trim()
-        if($domainJoin -eq "YES")
-        {
-            Write-Host "Computer is domain joined- removing from domain..."
-            $chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_-=+?<>~"
-        	$random = 1..16 | ForEach-Object { Get-Random -Maximum $chars.Length } | ForEach-Object { $chars[ $_ ] }
-        	$passwordString = -join $random
-            $password = ConvertTo-SecureString -String $passwordString -AsPlainText -Force
-            # try to enable local admin account and set password
-            try
-            {
-                Set-LocalUser -Name "Administrator" -Password $password
-                Get-LocalUser -Name "Administrator" | Enable-LocalUser
-                $cred = New-Object System.Management.Automation.PSCredential ("$hostname\Administrator", $password)
-                Write-Host "Enabled local admin account and set password"
-                try 
-                {
-                    Remove-Computer -UnjoinDomainCredential $cred -Force -PassThru -Verbose
-                    Write-Host "Computer removed from domain"
-                    Start-Sleep -Seconds 2
-                }
-                catch 
-                {
-                    $message = $_.Exception.Message
-                    Write-Host "Error removing computer from domain: $message"
-                    Write-Host "Stopping migration process..."
-                    Exit 1
-                }
-            }
-            catch
-            {
-                $message = $_.Exception.Message
-                Write-Host "Error enabling local admin account and setting password: $message"
-                Write-Host "Stopping migration process..."
-                Exit 1
-            }
-        }
-        else
-        {
-            Write-Host "Computer is not domain joined"
-        }
+Stop-Transcript
 
-        # Run ppkg to join device to destination tenant
-        $ppkg = Get-ChildItem -Path $localPath -Filter *.ppkg -Recurse
-        Write-Host "Installing provisioning package..."
-        try
-        {
-            Install-ProvisioningPackage -PackagePath $ppkg.FullName -QuietInstall -Force
-            Write-Host "Provisioning package installed"
-        }
-        catch
-        {
-            $message = $_.Exception.Message
-            Write-Host "Error installing provisioning package: $message"
-            Exit 1
-        }
-
-        # Delete Intune Object in source tenant
-        Write-Host "Deleting Intune object in source tenant..."
-        if($intuneID -ne $null)
-        {
-            try 
-            {
-                Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceManagement/managedDevices/$($intuneID)" -Headers $headers -Method Delete
-                Write-Host "Intune object deleted"
-                Start-Sleep -Seconds 2
-            }
-            catch 
-            {
-                $message = $_.Exception.Message
-                Write-Host "Error deleting Intune object: $message"
-            }
-        }
-        else
-        {
-            Write-Host "Intune object not found"
-        }
-
-        # Delete Autopilot object in source tenant
-        Write-Host "Deleting Autopilot object in source tenant..."
-        if($autopilotID -ne $null)
-        {
-            try 
-            {
-                Invoke-RestMethod -Uri "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities/$($autopilotID)" -Headers $headers -Method Delete
-                Write-Host "Autopilot object deleted"
-                Start-Sleep -Seconds 2
-            }
-            catch 
-            {
-                $message = $_.Exception.Message
-                Write-Host "Error deleting Autopilot object: $message"
-            }
-        }
-        else
-        {
-            Write-Host "Autopilot object not found"
-        }
-
-        Write-Host "StartMigrate process complete... shutting down in 30 seconds"
-
-        Stop-Transcript
-
-        shutdown -r -t 30
+shutdown -r -t 30

@@ -27,13 +27,12 @@ catch
 }
 
 # reset lock screen image
-$lockImg2 = $settings.lockScreen2
+$lockImg2 = $settings.lockScreen.lockScreen2
 $lockImgPath2 = "$($localPath)\$($lockImg2)"
 
 Write-Host "Resetting lock screen image..."
 $lockScreenPath = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP"
 reg.exe add $lockScreenPath /v "LockScreenImagePath" /t REG_SZ /d $lockImgPath2 /f | Out-Host
-reg.exe add $lockScreenPath /v "LockScreenImageUrl" /t REG_SZ /d $lockImgPath2 /f | Out-Host
 
 # get original user info from registry
 $regPath = $settings.regPath
