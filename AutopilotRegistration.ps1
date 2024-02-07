@@ -28,7 +28,7 @@ catch
 
 # install required modules
 Write-Host "Installing required modules..."
-$nuget = Get-PackageProvider -Name NuGet -ErrorAction Ignore
+$nuget = Get-PackageProvider -ListAvailable -Name NuGet -ErrorAction Ignore
 Write-Host "Checking for NuGet..."
 if(-not($nuget))
 {

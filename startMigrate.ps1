@@ -348,12 +348,10 @@ catch
 
 
 # Set lock screen image
-$lockImg1 = $settings.lockScreen1
 $lockImgPath1 = "$($localPath)\$($lockImg1)"
 
 $lockScreenPath = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\PersonalizationCSP"
 reg.exe add $lockScreenPath /v "LockScreenImagePath" /t REG_SZ /d $lockImgPath1 /f | Out-Host
-reg.exe add $lockScreenPath /v "LockScreenImageUrl" /t REG_SZ /d $lockImgPath1 /f | Out-Host
 reg.exe add $lockScreenPath /v "LockScreenImageStatus" /t REG_DWORD /d 1 /f | Out-Host
 
 # remove device from Azure AD
