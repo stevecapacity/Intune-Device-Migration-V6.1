@@ -1,9 +1,13 @@
-# Intune Device Migration V6
+# Intune Device Migration V6 - 6.1 UPDATE
  V6 (Removes need for profile migration)
 
  Intune Intune device migration V6 is available now.
 
  The migration solution has now been updated to not require any transfer of files from the original user profile to the new user, along with other improvements.
+
+ ## **NEW FOR 6.1**
+ - **FUNCTIONS**: The Intune Device Migration solution is now handled with PowerShell functions to make everything more modular and efficient
+ - **LOCK SCREENS**: I'll admit it first; the idea of using lock screen images was short sighted and not good.  So now, we are taking advantage of the "Legal notice" policy to set lock screen messages dynamicly to each phase of the migration
 
  ## User data
  The updated process for preserving the user profile is as follows:
@@ -53,12 +57,6 @@ Logs are now stored in "C:\ProgramData\Microsoft\IntuneManagementExtension\Logs"
 
 **$groupTag**:
 * *Specify Group Tag to be used in destination tenant with Autopilot.  If using an existing tag in the source tenant, leave blank*
-
-**$lockScreen**
-* **$lockScreen1**:
-    * *PNG or JPG file to be displayed once device leaves source tenant.  This should contain IT helpdesk contact info*
-* **$lockScreen2**:
-    * *PNG or JPG file of corporate lock screen to be shown once migration completes*
 
 **$bitlockerMethod**:
 * *Specifies method for managing Bitlocker migration (MIGRATE/DECRYPT)*
