@@ -1,143 +1,285 @@
-# This script is used to register the PC in the destination tenant Autopilot environment.
-# It is executed by the 'AutopilotRegistration' scheduled task.
+<# AUTOPILOTREGISTRATION.PS1
+Synopsis
+AutopilotRegistration.ps1 is the last script in the device migration process.
+DESCRIPTION
+This script is used to register the PC in the destination tenant Autopilot environment.  Will use a group tag if available.
+USE
+.\AutopilotRegistration.ps1
+.OWNER
+Steve Weiner
+.CONTRIBUTORS
+Logan Lautt
+Jesse Weimer
+#>
 
-$settings = Get-Content -Path "$($PSScriptRoot)\settings.json" | ConvertFrom-Json
+$ErrorActionPreference = "SilentlyContinue"
+# CMDLET FUNCTIONS
 
-$localPath = $settings.localPath
-if(!(Test-Path $localPath))
+# set log function
+function log()
 {
-    mkdir $localPath
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [string]$message
+    )
+    $ts = Get-Date -Format "yyyy-MM-dd HH:mm:ss tt"
+    Write-Output "$ts $message"
 }
 
-# Start Logging
-$logPath = $settings.logPath
-Start-Transcript -Path "$logPath\AutopilotRegistration.log" -Verbose
+# CMDLET FUNCTIONS
 
-# Disable AutopilotRegistration task
-Write-Host "Disabling AutopilotRegistration task..."
+# START SCRIPT FUNCTIONS
+
+# get json settings
+function getSettingsJSON()
+{
+    Param(
+        [string]$json = "settings.json"
+    )
+    $global:settings = Get-Content -Path "$($PSScriptRoot)\$($json)" | ConvertFrom-Json
+    return $settings
+}
+
+# initialize script
+function initializeScript()
+{
+    Param(
+        [string]$logPath = $settings.logPath,
+        [string]$logName = "autopilotRegistration.log",
+        [string]$localPath = $settings.localPath
+    )
+    Start-Transcript -Path "$logPath\$logName" -Verbose
+    log "Initializing script..."
+    if(!(Test-Path $localPath))
+    {
+        mkdir $localPath
+        log "Local path created: $localPath"
+    }
+    else
+    {
+        log "Local path already exists: $localPath"
+    }
+    $global:localPath = $localPath
+    $context = whoami
+    log "Running as $($context)"
+    log "Script initialized"
+    return $localPath
+}
+
+# disable scheduled task
+function disableAutopilotRegistrationTask()
+{
+    Param(
+        [string]$taskName = "AutopilotRegistration"
+    )
+    Disable-ScheduledTask -TaskName $taskName
+    log "AutopilotRegistration task disabled"    
+}
+
+# install modules
+function installModules()
+{
+    Param(
+        [string]$nuget = "NuGet",
+        [string[]]$modules = @(
+            "Microsoft.Graph.Intune",
+            "WindowsAutoPilotIntune"
+        )
+    )
+    log "Checking for NuGet..."
+    $installedNuGet = Get-PackageProvider -Name $nuget -ListAvailable -ErrorAction SilentlyContinue
+    if(-not($installedNuGet))
+    {      
+        Install-PackageProvider -Name $nuget -Confirm:$false -Force
+        log "NuGet successfully installed"    
+    }
+    else
+    {
+        log "NuGet already installed"
+    }
+    log "Checking for required modules..."
+    foreach($module in $modules)
+    {
+        log "Checking for $module..."
+        $installedModule = Get-Module -Name $module -ErrorAction SilentlyContinue
+        if(-not($installedModule))
+        {
+            Install-Module -Name $module -Confirm:$false -Force
+            Import-Module $module
+            log "$module successfully installed"
+        }
+        else
+        {
+            Import-Module $module
+            log "$module already installed"
+        }
+    }
+}
+
+# authenticate ms graph
+function msGraphAuthenticate()
+{
+    Param(
+        [string]$tenant = $settings.targetTenant.tenantName,
+        [string]$clientId = $settings.targetTenant.clientId,
+        [string]$clientSecret = $settings.targetTenant.clientSecret,
+        [string]$tenantId = $settings.targetTenant.tenantId
+    )
+    log "Authenticating to Microsoft Graph..."
+    $clientSecureSecret = ConvertTo-SecureString $clientSecret -AsPlainText -Force
+    $clientSecretCredential = New-Object System.Management.Automation.PSCredential -ArgumentList $clientId,$clientSecureSecret
+    Connect-MgGraph -TenantId $tenantId -ClientSecretCredential $clientSecretCredential
+    log "Authenticated to  $($tenant) Microsoft Graph"
+}
+
+# get autopilot info
+function getAutopilotInfo()
+{
+    Param(
+        [string]$serialNumber = (Get-WmiObject -Class Win32_BIOS).SerialNumber,
+        [string]$hardwareIdentifier = ((Get-WmiObject -Namespace root/cimv2/mdm/dmmap -Class MDM_DevDetail_Ext01 -Filter "InstanceID='Ext' AND ParentID='./DevDetail'").DeviceHardwareData)
+    )
+    log "Collecting Autopilot device info..."
+    if([string]::IsNullOrWhiteSpace($serialNumber)) 
+    { 
+        $serialNumber = $env:COMPUTERNAME 
+    }
+    $global:autopilotInfo = @{
+        serialNumber = $serialNumber
+        hardwareIdentifier = $hardwareIdentifier
+    }
+    log "Autopilot device info collected"
+    return $autopilotInfo    
+}
+
+# register autopilot device
+function autopilotRegister()
+{
+    Param(
+        [string]$regPath = $settings.regPath,
+        [string]$regKey = "Registry::$regPath",
+        [string]$serialNumber = $autopilotInfo.serialNumber,
+        [string]$hardwareIdentifier = $autopilotInfo.hardwareIdentifier,
+        [string]$groupTag = (Get-ItemPropertyValue -Path $regKey -Name "GroupTag")
+    )
+    log "Registering Autopilot device..."
+    if([string]::IsNullOrWhiteSpace($groupTag))
+    {
+        Add-AutopilotImportedDevice -serialNumber $serialNumber -hardwareIdentifier $hardwareIdentifier
+        log "Autopilot device registered"
+    }
+    else 
+    {
+        Add-AutopilotImportedDevice -serialNumber $serialNumber -hardwareIdentifier $hardwareIdentifier -groupTag $groupTag
+        log "Autopilot device registered with group tag $groupTag"
+    }
+}
+
+# END SCRIPT FUNCTIONS
+
+# START SCRIPT
+
+# get settings
 try 
 {
-    Disable-ScheduledTask -TaskName "AutopilotRegistration"
-    Write-Host "AutopilotRegistration task disabled"    
+    getSettingsJSON
+    log "Settings retrieved"
 }
 catch 
 {
     $message = $_.Exception.Message
-    Write-Host "AutopilotRegistration task not disabled: $message"
+    log "Error getting settings: $message"
+    log "Exiting script"
+    Exit 1    
 }
 
-# install required modules
-Write-Host "Installing required modules..."
-$nuget = Get-PackageProvider -ListAvailable -Name NuGet -ErrorAction Ignore
-Write-Host "Checking for NuGet..."
-if(-not($nuget))
+# initialize script
+try 
 {
-    Write-Host "NuGet not found.  Installing NuGet..."
-    try {
-        Install-PackageProvider -Name NuGet -Confirm:$false -Force
-        Write-Host "NuGet installed"    
-    }
-    catch {
-        $message = $_.Exception.Message
-        Write-Host "NuGet not installed: $message"
-    }
+    initializeScript
+    log "Script initialized"
 }
-else
+catch 
 {
-    Write-Host "NuGet found"
+    $message = $_.Exception.Message
+    log "Error initializing script: $message"
+    log "Exiting script"
+    Exit 1    
 }
 
-$requiredModules = @(
-    "Microsoft.Graph.Intune"
-    "WindowsAutoPilotIntune"
-)
-
-foreach($module in $requiredModules)
+# disable scheduled task
+try 
 {
-    Write-Host "Checking for $module..."
-    $installedModule = Get-Module -Name $module -ErrorAction Ignore
-    if(-not($installedModule))
-    {
-        Write-Host "$module not found.  Installing $module..."
-        try {
-            Install-Module -Name $module -Confirm:$false -AllowClobber -Force
-            Write-Host "$module installed"    
-        }
-        catch {
-            $message = $_.Exception.Message
-            Write-Host "$module not installed: $message"
-        }
-    }
-    else
-    {
-        Write-Host "$module found"
-    }
+    disableAutopilotRegistrationTask
+    log "AutopilotRegistration task disabled"
 }
-
-# Authenticate to destination tenant
-$clientId = $settings.targetTenant.clientId
-$clientSecret = $settings.targetTenant.clientSecret
-$clientSecureSecret = ConvertTo-SecureString $clientSecret -AsPlainText -Force
-$clientSecretCredential = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $clientId, $clientSecureSecret
-$tenantId = $settings.targetTenant.tenantId
-
-Connect-MgGraph  -TenantId $tenantId -ClientSecret $clientSecretCredential
-
-# get Autopilot device info
-Write-Host "Collecting Autopilot device info..."
-$serialNumber = Get-WmiObject -Class Win32_BIOS | Select-Object -ExpandProperty SerialNumber
-if([string]::IsNullOrWhiteSpace($serialNumber)) { $serialNumber = $env:COMPUTERNAME }
-Write-Host "Serial number: $serialNumber"
-
-$hwid = ((Get-WmiObject -Namespace root/cimv2/mdm/dmmap -Class MDM_DevDetail_Ext01 -Filter "InstanceID='Ext' AND ParentID='./DevDetail'").DeviceHardwareData)
-Write-Host "Hardware ID: $hwid"
-
-Write-Host "Retrieving Group tag from registry..."
-$regPath = $settings.regPath
-$key = "Registry::$regPath"
-$groupTag = Get-ItemPropertyValue -Path $key -Name "GroupTag"
-
-$useTag = ""
-
-if($groupTag -ne $null)
+catch 
 {
-    $tag = $groupTag
-    Write-Host "Group tag: $tag"
-    $useTag = $true
-}
-else 
-{
-    Write-Host "Will not be used"
-    $useTag = $false
+    $message = $_.Exception.Message
+    log "AutopilotRegistration task not disabled: $message"
+    log "Exiting script"
+    Exit 1
 }
 
-# Register device in Autopilot
-Write-Host "Registering device in Autopilot..."
-if($useTag)
+# install modules
+try 
 {
-    Write-Host "Using group tag..."
-    try 
-    {
-        Add-AutopilotImportedDevice -serialNumber $serialNumber -hardwareIdentifier $hwid -groupTag $tag
-        Write-Host "Device registered in Autopilot"    
-    }
-    catch 
-    {
-        $message = $_.Exception.Message
-        Write-Host "Device not registered in Autopilot: $message"
-    }
+    installModules
+    log "Modules installed"
 }
-else
+catch 
 {
-    Write-Host "Not using group tag..."
-    try 
-    {
-        Add-AutopilotImportedDevice -serialNumber $serialNumber -hardwareIdentifier $hwid
-        Write-Host "Device registered in Autopilot"    
-    }
-    catch 
-    {
-        $message = $_.Exception.Message
-        Write-Host "Device not registered in Autopilot: $message"
-    }
+    $message = $_.Exception.Message
+    log "Error installing modules: $message"
+    log "Exiting script"
+    Exit 1
 }
+
+# authenticate ms graph
+try 
+{
+    msGraphAuthenticate
+    log "Authenticated to Microsoft Graph"
+}
+catch 
+{
+    $message = $_.Exception.Message
+    log "Error authenticating to Microsoft Graph: $message"
+    log "Exiting script"
+    Exit 1
+}
+
+# get autopilot info
+try 
+{
+    getAutopilotInfo
+    log "Autopilot device info collected"
+}
+catch 
+{
+    $message = $_.Exception.Message
+    log "Error collecting Autopilot device info: $message"
+    log "Exiting script"
+    Exit 1
+}
+
+# register autopilot device
+try 
+{
+    autopilotRegister
+    log "Autopilot device registered"
+}
+catch 
+{
+    $message = $_.Exception.Message
+    log "Error registering Autopilot device: $message"
+    log "WARNING: Try to manually register the device in Autopilot"
+}
+
+# END SCRIPT
+
+# stop transcript
+log "Script completed"
+
+Stop-Transcript
