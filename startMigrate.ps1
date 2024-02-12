@@ -450,16 +450,9 @@ function unjoinDomain()
         }
         $cred = New-Object System.Management.Automation.PSCredential ("$hostname\Administrator", $password)
         log "Unjoining domain..."
-        try 
-        {
-            Remove-Computer -UnjoinDomainCredential $cred -Force -PassThru -Verbose
-            log "$hostname unjoined domain."    
-        }
-        catch 
-        {
-            $message = $_.Exception.Message
-            log "Failed to unjoin $hostname from domain: $message."
-        }
+        Remove-Computer -UnjoinDomainCredential $cred -Force -PassThru -Verbose
+        log "$hostname unjoined domain."    
+
     }
     else
     {
