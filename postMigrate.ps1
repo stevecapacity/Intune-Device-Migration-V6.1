@@ -203,7 +203,6 @@ function updateGroupTag()
         } | ConvertTo-Json
         Invoke-RestMethod -Uri "$deviceUri/$deviceId" -Method Patch -Headers $headers -Body $body
         log "Device group tag updated to $groupTag"      
-
     }
 }
 
@@ -212,12 +211,13 @@ function migrateBitlockerKey()
 {
     Param(
         [string]$mountPoint = "C:",
-        [PSCustomObject]$bitLockerVolume = (Get-BitLockerVolume -MountPoint $mountPoint)
+        [PSCustomObject]$bitLockerVolume = (Get-BitLockerVolume -MountPoint $mountPoint),
+        [string]$keyProtectorId = ($bitLockerVolume.KeyProtector | Where-Object {$_.KeyProtectorType -eq "RecoveryPassword"}).KeyProtectorId
     )
     log "Migrating Bitlocker key..."
     if($bitLockerVolume.KeyProtector.count -gt 0)
     {
-        BackupToAAD-BitLockerKeyProtector -MountPoint $mountPoint -KeyProtectorId $bitLockerVolume.KeyProtector[1].KeyProtectorId
+        BackupToAAD-BitLockerKeyProtector -MountPoint $mountPoint -KeyProtectorId $keyProtectorId
         log "Bitlocker key migrated"
     }
     else
@@ -246,13 +246,10 @@ function manageBitlocker()
     if($bitlockerMethod -eq "Migrate")
     {
         migrateBitlockerKey
-        log "Bitlocker key migrated"
-
     }
     elseif($bitlockerMethod -eq "Decrypt")
     {
         decryptDrive
-        log "Drive decrypted"
     }
     else
     {
