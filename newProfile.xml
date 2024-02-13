@@ -8,7 +8,7 @@
   <Triggers>
     <LogonTrigger>
       <Enabled>true</Enabled>
-      <Delay>PT10S</Delay>
+      <Delay>PT30S</Delay>
     </LogonTrigger>
   </Triggers>
   <Principals>
