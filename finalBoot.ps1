@@ -541,6 +541,6 @@ catch
 log "Script completed"
 log "Rebooting machine..."
 
-shutdown -r -t 15
+shutdown -r -t 5
 
 Stop-Transcript

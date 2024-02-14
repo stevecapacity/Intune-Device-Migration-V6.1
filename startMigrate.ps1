@@ -452,7 +452,6 @@ function unjoinDomain()
         log "Unjoining domain..."
         Remove-Computer -UnjoinDomainCredential $cred -Force -PassThru -Verbose
         log "$hostname unjoined domain."    
-
     }
     else
     {
