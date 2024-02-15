@@ -566,29 +566,31 @@ function setLockScreenCaption()
 # SCRIPT FUNCTIONS END
 
 # run getSettingsJSON
+log "Running FUNCTION: getSettingsJSON..."
 try 
 {
     getSettingsJSON
-    log "Retrieved settings JSON."
+    log "FUNCTION: getSettingsJSON ran successfully"
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Failed to get settings JSON: $message."  
+    log "FUNCTION: getSettingsJSON failed $message."  
     log "Exiting script."
     Exit 1  
 }
 
 # run initializeScript
+log "Running FUNCTION: initializeScript..."
 try 
 {
     initializeScript
-    log "Initialized script."
+    log "FUNCTION: initializeScript ran successfully"
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Failed to initialize script: $message."
+    log "FUNCTION: initializeScript failed $message."
     log "Exiting script."
     Exit 1
 }
