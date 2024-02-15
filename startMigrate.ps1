@@ -31,6 +31,24 @@ function log()
     Write-Output "$ts $message"
 }
 
+# exit script if critical error
+function exitScript()
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [int]$exitCode,
+        [string]$localpath = $localPath
+    )
+    if($exitCode -eq 1)
+    {
+        log "Exiting script with exit code $($exitCode)."
+        Remove-Item -Path $localpath -Recurse -Force -Verbose
+        Exit 1
+    }
+}   
+
+
 # get dsreg status
 function joinStatus()
 {
@@ -575,9 +593,9 @@ try
 catch 
 {
     $message = $_.Exception.Message
-    log "FUNCTION: getSettingsJSON failed $message."  
+    log "FUNCTION: getSettingsJSON failed - $message."  
     log "Exiting script."
-    Exit 1  
+    exitScript -exitCode 1
 }
 
 # run initializeScript
@@ -590,37 +608,39 @@ try
 catch 
 {
     $message = $_.Exception.Message
-    log "FUNCTION: initializeScript failed $message."
+    log "FUNCTION: initializeScript failed - $message."
     log "Exiting script."
-    Exit 1
+    exitScript -exitCode 1
 }
 
 # run copyPackageFiles
+log "Running FUNCTION: copyPackageFiles..."
 try 
 {
     copyPackageFiles
-    log "Copied package files."
+    log "FUNCTION: copyPackageFiles ran successfully."
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Failed to copy package files: $message."
+    log "FUNCTION: copyPackageFiles failed - $message."
     log "Exiting script."
-    Exit 1
+    exitScript -exitCode 1
 }
 
 # run msGraphAuthenticate
+log "Running FUNCTION: msGraphAuthenticate..."
 try 
 {
     msGraphAuthenticate
-    log "Authenticated to MS Graph."
+    log "FUNCTION: msGraphAuthenticate ran successfully."
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Failed to authenticate to MS Graph: $message."
+    log "FUNCTION: msGraphAuthenticate failed - $message."
     log "Exiting script."
-    Exit 1
+    exitScript -exitCode 1
 }
 
 # run getDeviceInfo
