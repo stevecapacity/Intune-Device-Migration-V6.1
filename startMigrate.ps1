@@ -373,37 +373,6 @@ function removeMDMEnrollments()
     }
 }
 
-# remove mdm scheduled tasks
-function removeMDMTasks()
-{
-    Param(
-        [string]$taskPath = "\Microsoft\Windows\EnterpriseMgmt",
-        [string]$enrollID = $enrollID
-    )
-    $mdmTasks = Get-ScheduledTask -TaskPath "$($taskPath)\$($enrollID)\" -ErrorAction Ignore
-    if($mdmTasks -gt 0)
-    {
-        foreach($task in $mdmTasks)
-        {
-            log "Removing $($task.Name)..."
-            try
-            {
-                Unregister-ScheduledTask -TaskName $task.Name -Confirm:$false
-                log "Removed $($task.Name)."
-            }
-            catch
-            {
-                $message = $_.Exception.Message
-                log "Failed to remove $($task.Name): $($message)."
-            }
-        }
-    }
-    else
-    {
-        log "No MDM tasks found."
-    }
-}
-
 # set post migration tasks
 function setPostMigrationTasks()
 {
@@ -603,7 +572,7 @@ catch
     $message = $_.Exception.Message
     log "FUNCTION: getSettingsJSON failed - $message."  
     log "Exiting script."
-    exitScript -exitCode 1
+    Exit 1
 }
 
 # run initializeScript
@@ -618,7 +587,7 @@ catch
     $message = $_.Exception.Message
     log "FUNCTION: initializeScript failed - $message."
     log "Exiting script."
-    exitScript -exitCode 1
+    Exit 1
 }
 
 # run copyPackageFiles
@@ -633,7 +602,7 @@ catch
     $message = $_.Exception.Message
     log "FUNCTION: copyPackageFiles failed - $message."
     log "Exiting script."
-    exitScript -exitCode 1
+    Exit 1
 }
 
 # run msGraphAuthenticate
@@ -648,7 +617,7 @@ catch
     $message = $_.Exception.Message
     log "FUNCTION: msGraphAuthenticate failed - $message."
     log "Exiting script."
-    exitScript -exitCode 1
+    Exit 1
 }
 
 # run getDeviceInfo
@@ -743,19 +712,6 @@ catch
     log "Failed to remove MDM enrollments: $message."
     log "Exiting script."
     Exit 1
-}
-
-# run removeMDMTasks
-try 
-{
-    removeMDMTasks
-    log "Removed MDM tasks."
-}
-catch 
-{
-    $message = $_.Exception.Message
-    log "Failed to remove MDM tasks: $message."
-    log "Warning: Validate device integrity post migration."
 }
 
 # run setPostMigrationTasks
