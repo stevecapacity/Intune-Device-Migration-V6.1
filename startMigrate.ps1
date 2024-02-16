@@ -38,13 +38,22 @@ function exitScript()
     Param(
         [Parameter(Mandatory=$true)]
         [int]$exitCode,
+        [string]$functionName,
         [string]$localpath = $localPath
     )
     if($exitCode -eq 1)
     {
-        log "Exiting script with exit code $($exitCode)."
+        log "Function $($functionName) failed with critical error.  Exiting script with exit code $($exitCode)."
+        log "Will remove $($localpath) and reboot device.  Please log in with local admin credentials on next boot to troubleshoot."
         Remove-Item -Path $localpath -Recurse -Force -Verbose
-        Exit 1
+        log "Removed $($localpath)."
+        # enable password logon provider
+        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers\{60b78e88-ead8-445c-9cfd-0b87f74ea6cd}" /v "Disabled" /t REG_DWORD /d 0 /f | Out-Host
+        log "Enabled logon provider."
+        log "rebooting device..."
+        shutdown -r -t 30
+        Stop-Transcript
+        Exit -1
     }
 }   
 
@@ -203,7 +212,6 @@ function getOriginalUserInfo()
     }
     foreach($key in $originalUserInfo.Keys)
     {
-        New-Variable -Name $key -Value $originalUserInfo[$key] -Scope Global -Force
         if([string]::IsNullOrEmpty($originalUserInfo[$key]))
         {
             log "Failed to set $($key) to registry."
