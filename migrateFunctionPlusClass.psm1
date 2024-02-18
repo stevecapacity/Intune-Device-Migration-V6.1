@@ -275,20 +275,9 @@ function getDeviceGraphInfo()
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory=$true)]
-        [string]$serialNumber
-    )
-
-}
-
-function addFlavor()
-{
-    [CmdletBinding()]
-    Param(
+        [string]$serialNumber,
         [Parameter(Mandatory=$true)]
-        [string]$flavor,
-        [Parameter(Mandatory=$true)]
-        [object]$device
+        [string]$device
     )
-    $device.intuneDeviceId = $flavor
-    log "Flavor added: $flavor"
+    
 }
