@@ -263,21 +263,26 @@ function newDeviceObject()
     return $pc
 }
 
-$computer4 = newDeviceObject
-
 # get device graph info
 # DESCRIPTION: Gets the device information for Azure and Intune if the device is enrolled.
 # USE: getIntuneDeviceInfo -serialNumber "serialNumber"
 # PARAMETER: serialNumber - The serial number of the device.
 # RETURN: $device - The device object.
-function getDeviceGraphInfo()
+function getGraphInfo()
 {
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory=$true)]
-        [string]$serialNumber,
-        [Parameter(Mandatory=$true)]
-        [string]$device
+        [object[]]$device
     )
-    
+    if($device.mdm -eq $true)
+    {
+        $intuneDevice = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/beta/deviceManagement/managedDevices?\$filter=serialNumber eq '$($device.serialNumber)'" -Headers $headers
+        $device += @{
+            intuneDeviceId = $intuneDevice.value.id
+            azureAdDeviceId = $intuneDevice.value.deviceId
+        }
+        log "Intune device info retrieved"
+    }
+    return $device   
 }
