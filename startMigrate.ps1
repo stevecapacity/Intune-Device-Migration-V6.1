@@ -355,6 +355,10 @@ function removeMDMEnrollments()
             Remove-Item -Path $enrollPath -Recurse
             log "Removed $($enrollPath)."
         }
+        else 
+        {
+            log "No MDM enrollments found."
+        }
     }
     $global:enrollID = $enrollPath.Split("\")[-1]
     $additionaPaths = @(
@@ -368,10 +372,18 @@ function removeMDMEnrollments()
     )
     foreach($path in $additionaPaths)
     {
-        Remove-Item -Path $path -Recurse
-        log "Removed $($path)."
+        if(Test-Path $path)
+        {        
+            Remove-Item -Path $path -Recurse
+            log "Removed $($path)."
+        }
+        else 
+        {
+            log "$($path) not found."
+        }
     }
 }
+
 
 # set post migration tasks
 function setPostMigrationTasks()
@@ -572,7 +584,7 @@ catch
     $message = $_.Exception.Message
     log "FUNCTION: getSettingsJSON failed - $message."  
     log "Exiting script."
-    Exit 1
+    exitScript -exitCode 1
 }
 
 # run initializeScript
@@ -587,7 +599,7 @@ catch
     $message = $_.Exception.Message
     log "FUNCTION: initializeScript failed - $message."
     log "Exiting script."
-    Exit 1
+    exitScript -exitCode 1
 }
 
 # run copyPackageFiles
@@ -602,7 +614,7 @@ catch
     $message = $_.Exception.Message
     log "FUNCTION: copyPackageFiles failed - $message."
     log "Exiting script."
-    Exit 1
+    exitScript -exitCode 1
 }
 
 # run msGraphAuthenticate
@@ -617,7 +629,7 @@ catch
     $message = $_.Exception.Message
     log "FUNCTION: msGraphAuthenticate failed - $message."
     log "Exiting script."
-    Exit 1
+    exitScript -exitCode 1
 }
 
 # run getDeviceInfo
