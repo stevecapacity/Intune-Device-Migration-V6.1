@@ -224,7 +224,8 @@ function getIntuneStatus()
 # PARAMETER: aadDeviceId - The Azure AD device id of the device.
 # PARAMETER: autopilotDeviceId - The Autopilot device id of the device.
 # PARAMETER: groupTag - The group tag of the device.
-# RETURN: $device - The device object.function newDeviceObject()
+# RETURN: $device - The device object.
+function newDeviceObject()
 {
     Param(
         [string]$serialNumber = (Get-WmiObject -Class Win32_Bios).serialNumber,
