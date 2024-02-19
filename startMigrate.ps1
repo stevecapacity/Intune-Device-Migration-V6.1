@@ -55,6 +55,20 @@ function exitScript()
         Stop-Transcript
         Exit -1
     }
+    elseif($exitCode -eq 4)
+    {
+        log "Function $($functionName) failed with non-critical error.  Exiting script with exit code $($exitCode)."
+        Remove-Item -Path $localpath -Recurse -Force -Verbose
+        log "Removed $($localpath)."
+        Stop-Transcript
+        Exit 1
+    }
+    else
+    {
+        log "Function $($functionName) failed with unknown error.  Exiting script with exit code $($exitCode)."
+        Stop-Transcript
+        Exit 1
+    }
 }   
 
 
@@ -116,7 +130,7 @@ function initializeScript()
     Param(
         [string]$localPath = $settings.localPath,
         [string]$logPath = $settings.logPath,
-        [string]$installTag = "$($localPath)\install.tag",
+        [bool]$installTag = $true,
         [string]$logName = "startMigrate.log"
     )
     Start-Transcript -Path "$logPath\$logName" -Verbose
@@ -130,11 +144,20 @@ function initializeScript()
     {
         log "$($localPath) already exists."
     }
+    if($installTag -eq $true)
+    {
+        log "Install tag set to $installTag."
+        $installTag = "$($localPath)\installed.tag"
+        New-Item -Path $installTag -ItemType file -Force
+        log "Created $($installTag)."
+    }
+    else
+    {
+        log "Install tag set to $installTag."
+    }
     $global:localPath = $localPath
     $context = whoami
     log "Running as $($context)."
-    New-Item -Path $installTag -ItemType file -Force
-    log "Created $($installTag)."
     return $localPath
 }
 
@@ -181,12 +204,19 @@ function getDeviceInfo()
     Param(
         [string]$hostname = $env:COMPUTERNAME,
         [string]$serialNumber = (Get-WmiObject -Class Win32_BIOS | Select-Object SerialNumber).SerialNumber,
-        [string]$osBuild = (Get-WmiObject -Class Win32_OperatingSystem | Select-Object BuildNumber).BuildNumber
+        [string]$osBuild = (Get-WmiObject -Class Win32_OperatingSystem | Select-Object BuildNumber).BuildNumber,
+        [bool]$mdm = $false
     )
+    $cert = Get-ChildItem -Path 'Cert:\LocalMachine\My' | Where-Object { $_.Issuer -match "Microsoft Intune MDM Device CA" }
+    if($cert)
+    {
+        $mdm = $true
+    }
     $global:deviceInfo = @{
         "hostname" = $hostname
         "serialNumber" = $serialNumber
         "osBuild" = $osBuild
+        "mdm" = $mdm
     }
     foreach($key in $deviceInfo.Keys)
     {
@@ -202,12 +232,14 @@ function getOriginalUserInfo()
         [string]$originalUserSID = (New-Object System.Security.Principal.NTAccount($originalUser)).Translate([System.Security.Principal.SecurityIdentifier]).Value,
         [string]$originalUserName = (Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\Microsoft\IdentityStore\Cache\$($originalUserSID)\IdentityCache\$($originalUserSID)" -Name "UserName"),
         [string]$originalProfilePath = (Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$($originalUserSID)" -Name "ProfileImagePath"),
+        [string]$originalSAMName = ($originalUser).Split("\")[1],
         [string]$regPath = $settings.regPath
     )
     $global:originalUserInfo = @{
         "originalUser" = $originalUser
         "originalUserSID" = $originalUserSID
         "originalUserName" = $originalUserName
+        "originalSAMName" = $originalSAMName
         "originalProfilePath" = $originalProfilePath
     }
     foreach($key in $originalUserInfo.Keys)
@@ -231,7 +263,6 @@ function getDeviceGraphInfo()
         [string]$hostname = $deviceInfo.hostname,
         [string]$serialNumber = $deviceInfo.serialNumber,
         [string]$regPath = $settings.regPath,
-        [string]$groupTag = $settings.groupTag,
         [string]$intuneUri = "https://graph.microsoft.com/beta/deviceManagement/managedDevices",
         [string]$autopilotUri = "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities"
     )
@@ -584,7 +615,7 @@ catch
     $message = $_.Exception.Message
     log "FUNCTION: getSettingsJSON failed - $message."  
     log "Exiting script."
-    exitScript -exitCode 1
+    exitScript -exitCode 4 -functionName "getSettingsJSON"
 }
 
 # run initializeScript
@@ -599,7 +630,7 @@ catch
     $message = $_.Exception.Message
     log "FUNCTION: initializeScript failed - $message."
     log "Exiting script."
-    exitScript -exitCode 1
+    exitScript -exitCode 4 -functionName "initializeScript"
 }
 
 # run copyPackageFiles
@@ -614,7 +645,7 @@ catch
     $message = $_.Exception.Message
     log "FUNCTION: copyPackageFiles failed - $message."
     log "Exiting script."
-    exitScript -exitCode 1
+    exitScript -exitCode 4 -functionName "copyPackageFiles"
 }
 
 # run msGraphAuthenticate
@@ -629,207 +660,253 @@ catch
     $message = $_.Exception.Message
     log "FUNCTION: msGraphAuthenticate failed - $message."
     log "Exiting script."
-    exitScript -exitCode 1
+    exitScript -exitCode 4 -functionName "msGraphAuthenticate"
 }
 
 # run getDeviceInfo
+log "Running FUNCTION: getDeviceInfo..."
 try 
 {
     getDeviceInfo
-    log "Got device info."
+    log "FUNCTION: getDeviceInfo ran successfully."
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Failed to get device info: $message."
+    log "FUNCTION: getDeviceInfo failed - $message."
     log "Exiting script."
-    Exit 1
+    exitScript -exitCode 4 -functionName "getDeviceInfo"
 }
 
 # run getOriginalUserInfo
+log "Running FUNCTION: getOriginalUserInfo..."
 try 
 {
     getOriginalUserInfo
-    log "Got original user info."
+    log "FUNCTION: getOriginalUserInfo ran successfully."
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Failed to get original user info: $message."
+    log "FUNCTION: getOriginalUserInfo failed - $message."
     log "Exiting script."
-    Exit 1
+    exitScript -exitCode 4 -functionName "getOriginalUserInfo"
 }
 
 # run getDeviceGraphInfo
-try 
+if($deviceInfo.mdm -eq $true)
 {
-    getDeviceGraphInfo
-    log "Got device graph info."
+    log "Running FUNCTION: getDeviceGraphInfo..."
+    try 
+    {
+        getDeviceGraphInfo
+        log "FUNCTION: getDeviceGraphInfo ran successfully."
+    }
+    catch 
+    {
+        $message = $_.Exception.Message
+        log "FUNCTION: getDeviceGraphInfo failed - $message."
+        log "Exiting script."
+        exitScript -exitCode 4 -functionName "getDeviceGraphInfo"
+    }
 }
-catch 
+else 
 {
-    $message = $_.Exception.Message
-    log "Failed to get device graph info: $message."
-    log "WARNING: Validate device integrity post migration."
+    log "FUNCTION: getDeviceGraphInfo skipped: device is not MDM managed."    
 }
 
 # run setAccountConnection
+log "Running FUNCTION: setAccountConnection..."
 try 
 {
     setAccountConnection
-    log "Set account connection."
+    log "FUNCTION: setAccountConnection ran successfully."
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Failed to set account connection: $message."
+    log "FUNCTION: setAccountConnection failed - $message."
     log "WARNING: Validate device integrity post migration."
 }
 
 # run dontDisplayLastUsername
+log "Running FUNCTION: dontDisplayLastUsername..."
 try 
 {
     dontDisplayLastUsername
-    log "Set dont display last username."
+    log "FUNCTION: dontDisplayLastUsername ran successfully."
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Failed to set dont display last username: $message."
+    log "FUNCTION: dontDisplayLastUsername failed - $message."
     log "WARNING: Validate device integrity post migration."
 }
 
 # run removeMDMCertificate
-try 
+if($deviceInfo.mdm -eq $true)
 {
-    removeMDMCertificate
-    log "Removed MDM certificate."
+    log "Running FUNCTION: removeMDMCertificate..."
+    try 
+    {
+        removeMDMCertificate
+        log "FUNCTION: removeMDMCertificate ran successfully."
+    }
+    catch 
+    {
+        $message = $_.Exception.Message
+        log "FUNCTION: removeMDMCertificate failed - $message."
+        log "WARNING: Validate device integrity post migration."
+    }
 }
-catch 
+else 
 {
-    $message = $_.Exception.Message
-    log "Failed to remove MDM certificate: $message."
-    log "WARNING: Validate device integrity post migration."
+    log "FUNCTION: removeMDMCertificate skipped: device is not MDM managed."
 }
 
 # run removeMDMEnrollments
-try 
+if($deviceInfo.mdm -eq $true)
 {
-    removeMDMEnrollments
-    log "Removed MDM enrollments."
+    log "Running FUNCTION: removeMDMEnrollments..."
+    try 
+    {
+        removeMDMEnrollments
+        log "FUNCTION: removeMDMEnrollments ran successfully."
+    }
+    catch 
+    {
+        $message = $_.Exception.Message
+        log "FUNCTION: removeMDMEnrollments failed - $message."
+        log "Exiting script."
+        exitScript -exitCode 4 -functionName "removeMDMEnrollments"
+    }
 }
-catch 
+else 
 {
-    $message = $_.Exception.Message
-    log "Failed to remove MDM enrollments: $message."
-    log "Exiting script."
-    Exit 1
+    log "FUNCTION: removeMDMEnrollments skipped: device is not MDM managed."
 }
 
 # run setPostMigrationTasks
+log "Running FUNCTION: setPostMigrationTasks..."
 try 
 {
     setPostMigrationTasks
-    log "Set post migration tasks."
+    log "FUNCTION: setPostMigrationTasks ran successfully."
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Failed to set post migration tasks: $message."
+    log "FUNCTION: setPostMigrationTasks failed - $message."
     log "Exiting script."
-    Exit 1
+    exitScript -exitCode 4 -functionName "setPostMigrationTasks"
 }
 
 # run leaveAazureADJoin
+log "Running FUNCTION: leaveAazureADJoin..."
 try 
 {
     leaveAazureADJoin
-    log "Left Azure AD join."
+    log "FUNCTION: leaveAazureADJoin ran successfully."
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Failed to leave Azure AD join: $message."
+    log "FUNCTION: leaveAazureADJoin failed - $message."
     log "Exiting script."
-    Exit 1
+    exitScript -exitCode 4 -functionName "leaveAazureADJoin"
 }
 
 # run unjoinDomain
+log "Running FUNCTION: unjoinDomain..."
 try 
 {
     unjoinDomain
-    log "Unjoined domain."
+    log "FUNCTION: unjoinDomain ran successfully."
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Failed to unjoin domain: $message."
-    log "WARNING: Validate device integrity post migration."
+    log "FUNCTION: unjoinDomain failed - $message."
+    log "Exiting script."
+    exitScript -exitCode 4 -functionName "unjoinDomain"
 }
 
 # run InstallPPKGPackage
+log "Running FUNCTION: InstallPPKGPackage..."
 try 
 {
     InstallPPKGPackage
-    log "Installed provisioning package."
+    log "FUNCTION: InstallPPKGPackage ran successfully."
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Failed to install provisioning package: $message."
+    log "FUNCTION: InstallPPKGPackage failed - $message."
     log "Exiting script."
-    Exit 1
+    exitScript -exitCode 4 -functionName "InstallPPKGPackage"
 }
 
 # run deleteGraphObjects
-try 
+if($deviceInfo.mdm -eq $true)
 {
-    deleteGraphObjects
-    log "Deleted graph objects."
+    log "Running FUNCTION: deleteGraphObjects..."
+    try 
+    {
+        deleteGraphObjects
+        log "FUNCTION: deleteGraphObjects ran successfully."
+    }
+    catch 
+    {
+        $message = $_.Exception.Message
+        log "FUNCTION: deleteGraphObjects failed - $message."
+        log "Exiting script."
+        exitScript -exitCode 4 -functionName "deleteGraphObjects"
+    }
 }
-catch 
+else 
 {
-    $message = $_.Exception.Message
-    log "Failed to delete graph objects: $message."
-    log "WARNING: Validate device integrity post migration."
+    log "FUNCTION: deleteGraphObjects skipped: device is not MDM managed."
 }
 
 # run revokeLogonProvider
+log "Running FUNCTION: revokeLogonProvider..."
 try 
 {
     revokeLogonProvider
-    log "Revoked logon provider."
+    log "FUNCTION: revokeLogonProvider ran successfully."
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Failed to revoke logon provider: $message."
+    log "FUNCTION: revokeLogonProvider failed - $message."
     log "WARNING: Validate device integrity post migration."
 }
 
 # run setAutoLogon
+log "Running FUNCTION: setAutoLogon..."
 try 
 {
     setAutoLogon
-    log "Set auto logon."
+    log "FUNCTION: setAutoLogon ran successfully."
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Failed to set auto logon: $message."
+    log "FUNCTION: setAutoLogon failed - $message."
     log "WARNING: Validate device integrity post migration."
 }
 
 # run setLockScreenCaption
+log "Running FUNCTION: setLockScreenCaption..."
 try 
 {
     setLockScreenCaption
-    log "Set lock screen caption."
+    log "FUNCTION: setLockScreenCaption ran successfully."
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Failed to set lock screen caption: $message."
+    log "FUNCTION: setLockScreenCaption failed - $message."
     log "WARNING: Validate device integrity post migration."
 }
 

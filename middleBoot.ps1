@@ -27,6 +27,45 @@ function log()
     Write-Output "$ts $message"
 }
 
+function exitScript()
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [int]$exitCode,
+        [string]$functionName,
+        [string]$localpath = $localPath
+    )
+    if($exitCode -eq 1)
+    {
+        log "Function $($functionName) failed with critical error.  Exiting script with exit code $($exitCode)."
+        log "Will remove $($localpath) and reboot device.  Please log in with local admin credentials on next boot to troubleshoot."
+        Remove-Item -Path $localpath -Recurse -Force -Verbose
+        log "Removed $($localpath)."
+        # enable password logon provider
+        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers\{60b78e88-ead8-445c-9cfd-0b87f74ea6cd}" /v "Disabled" /t REG_DWORD /d 0 /f | Out-Host
+        log "Enabled logon provider."
+        log "rebooting device..."
+        shutdown -r -t 30
+        Stop-Transcript
+        Exit -1
+    }
+    elseif($exitCode -eq 4)
+    {
+        log "Function $($functionName) failed with non-critical error.  Exiting script with exit code $($exitCode)."
+        Remove-Item -Path $localpath -Recurse -Force -Verbose
+        log "Removed $($localpath)."
+        Stop-Transcript
+        Exit 1
+    }
+    else
+    {
+        log "Function $($functionName) failed with unknown error.  Exiting script with exit code $($exitCode)."
+        Stop-Transcript
+        Exit 1
+    }
+}   
+
 # CMDLET FUNCTIONS
 
 # START SCRIPT FUNCTIONS
@@ -125,86 +164,92 @@ function disableTask()
 # START SCRIPT
 
 # run get settings function
+log "Running FUNCTION: getSettingsJSON..."
 try
 {
     getSettingsJSON
-    log "Retrieved settings JSON"
+    log "FUNCTION: getSettingsJSON completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "Failed to get settings JSON: $message"
+    log "FUNCTION: getSettingsJSON failed: $message"
     log "Exiting script"
-    Exit 1
+    exitScript -exitCode 1 -functionName "getSettingsJSON"
 }
 
 # run initialize script function
+log "Running FUNCTION: initializeScript..."
 try
 {
     initializeScript
-    log "Initialized script"
+    log "FUNCTION: initializeScript completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "Failed to initialize script: $message"
+    log "FUNCTION: initializeScript failed: $message"
     log "Exiting script"
-    Exit 1
+    exitScript -exitCode 1 -functionName "initializeScript"
 }
 
 # run restore logon credential provider function
+log "Running FUNCTION: restoreLogonProvider..."
 try
 {
     restoreLogonProvider
-    log "Restored logon credential provider"
+    log "FUNCTION: restoreLogonProvider completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "Failed to restore logon credential provider: $message"
+    log "FUNCTION: restoreLogonProvider failed: $message"
     log "Exiting script"
-    Exit 1
+    exitScript -exitCode 1 -functionName "restoreLogonProvider"
 }
 
 # run set lock screen caption function
+log "Running FUNCTION: setLockScreenCaption..."
 try
 {
     setLockScreenCaption
-    log "Set lock screen caption"
+    log "FUNCTION: setLockScreenCaption completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "Failed to set lock screen caption: $message"
+    log "FUNCTION: setLockScreenCaption failed: $message"
     log "WARNING: Lock screen caption not set"
 }
 
 # run disable auto logon function
+log "Running FUNCTION: disableAutoLogon..."
 try
 {
     disableAutoLogon
-    log "Disabled auto logon"
+    log "FUNCTION: disableAutoLogon completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "Failed to disable auto logon: $message"
+    log "FUNCTION: disableAutoLogon failed: $message"
     log "Exiting script"
-    Exit 1
+    exitScript -exitCode 1 -functionName "disableAutoLogon"
 }
 
 # run disable task function
+log "Running FUNCTION: disableTask..."
 try
 {
     disableTask
-    log "Disabled middleBoot task"
+    log "FUNCTION: disableTask completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "Failed to disable middleBoot task: $message"
+    log "FUNCTION: disableTask failed: $message"
     log "Exiting script"
-    Exit 1
+    exitScript -exitCode 1 -functionName "disableTask"
 }
 
 # END SCRIPT

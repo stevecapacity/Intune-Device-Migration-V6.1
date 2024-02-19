@@ -27,6 +27,46 @@ function log()
     Write-Output "$ts $message"
 }
 
+# error function
+function exitScript()
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [int]$exitCode,
+        [string]$functionName,
+        [string]$localpath = $localPath
+    )
+    if($exitCode -eq 1)
+    {
+        log "Function $($functionName) failed with critical error.  Exiting script with exit code $($exitCode)."
+        log "Will remove $($localpath) and reboot device.  Please log in with local admin credentials on next boot to troubleshoot."
+        Remove-Item -Path $localpath -Recurse -Force -Verbose
+        log "Removed $($localpath)."
+        # enable password logon provider
+        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers\{60b78e88-ead8-445c-9cfd-0b87f74ea6cd}" /v "Disabled" /t REG_DWORD /d 0 /f | Out-Host
+        log "Enabled logon provider."
+        log "rebooting device..."
+        shutdown -r -t 30
+        Stop-Transcript
+        Exit -1
+    }
+    elseif($exitCode -eq 4)
+    {
+        log "Function $($functionName) failed with non-critical error.  Exiting script with exit code $($exitCode)."
+        Remove-Item -Path $localpath -Recurse -Force -Verbose
+        log "Removed $($localpath)."
+        Stop-Transcript
+        Exit 1
+    }
+    else
+    {
+        log "Function $($functionName) failed with unknown error.  Exiting script with exit code $($exitCode)."
+        Stop-Transcript
+        Exit 1
+    }
+} 
+
 # CMDLET FUNCTIONS
 
 # START SCRIPT FUNCTIONS
@@ -181,99 +221,106 @@ function autopilotRegister()
 # START SCRIPT
 
 # get settings
+log "Running FUNCTION: getSettingsJSON..."
 try 
 {
     getSettingsJSON
-    log "Settings retrieved"
+    log "FUNCTION: getSettingsJSON completed"
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Error getting settings: $message"
+    log "FUNCTION: getSettingsJSON failed: $message"
     log "Exiting script"
-    Exit 1    
+    exitScript -exitCode 2 -functionName "getSettingsJSON"
 }
 
 # initialize script
+log "Running FUNCTION: initializeScript..."
 try 
 {
     initializeScript
-    log "Script initialized"
+    log "FUNCTION: initializeScript completed"
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Error initializing script: $message"
+    log "FUNCTION: initializeScript failed: $message"
     log "Exiting script"
-    Exit 1    
+    exitScript -exitCode 2 -functionName "initializeScript"
 }
 
 # disable scheduled task
+log "Running FUNCTION: disableAutopilotRegistrationTask..."
 try 
 {
     disableAutopilotRegistrationTask
-    log "AutopilotRegistration task disabled"
+    log "FUNCTION: disableAutopilotRegistrationTask completed"
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "AutopilotRegistration task not disabled: $message"
+    log "FUNCTION: disableAutopilotRegistrationTask failed: $message"
     log "Exiting script"
-    Exit 1
+    exitScript -exitCode 2 -functionName "disableAutopilotRegistrationTask"
 }
 
 # install modules
+log "Running FUNCTION: installModules..."
 try 
 {
     installModules
-    log "Modules installed"
+    log "FUNCTION: installModules completed"
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Error installing modules: $message"
+    log "FUNCTION: installModules failed: $message"
     log "Exiting script"
-    Exit 1
+    exitScript -exitCode 2 -functionName "installModules"
 }
 
 # authenticate ms graph
+log "Running FUNCTION: msGraphAuthenticate..."
 try 
 {
     msGraphAuthenticate
-    log "Authenticated to Microsoft Graph"
+    log "FUNCTION: msGraphAuthenticate completed"
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Error authenticating to Microsoft Graph: $message"
+    log "FUNCTION: msGraphAuthenticate failed: $message"
     log "Exiting script"
-    Exit 1
+    exitScript -exitCode 2 -functionName "msGraphAuthenticate"
 }
 
 # get autopilot info
+log "Running FUNCTION: getAutopilotInfo..."
 try 
 {
     getAutopilotInfo
-    log "Autopilot device info collected"
+    log "FUNCTION: getAutopilotInfo completed"
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Error collecting Autopilot device info: $message"
+    log "FUNCTION: getAutopilotInfo failed: $message"
     log "Exiting script"
-    Exit 1
+    exitScript -exitCode 2 -functionName "getAutopilotInfo"
 }
 
 # register autopilot device
+log "Running FUNCTION: autopilotRegister..."
 try 
 {
     autopilotRegister
-    log "Autopilot device registered"
+    log "FUNCTION: autopilotRegister completed"
 }
 catch 
 {
     $message = $_.Exception.Message
-    log "Error registering Autopilot device: $message"
+    log "FUNCTION: autopilotRegister failed: $message"
     log "WARNING: Try to manually register the device in Autopilot"
 }
 

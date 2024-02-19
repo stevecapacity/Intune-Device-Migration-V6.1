@@ -27,6 +27,46 @@ function log()
     Write-Output "$ts $message"
 }
 
+# exit script function
+function exitScript()
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [int]$exitCode,
+        [string]$functionName,
+        [string]$localpath = $localPath
+    )
+    if($exitCode -eq 1)
+    {
+        log "Function $($functionName) failed with critical error.  Exiting script with exit code $($exitCode)."
+        log "Will remove $($localpath) and reboot device.  Please log in with local admin credentials on next boot to troubleshoot."
+        Remove-Item -Path $localpath -Recurse -Force -Verbose
+        log "Removed $($localpath)."
+        # enable password logon provider
+        reg.exe add "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers\{60b78e88-ead8-445c-9cfd-0b87f74ea6cd}" /v "Disabled" /t REG_DWORD /d 0 /f | Out-Host
+        log "Enabled logon provider."
+        log "rebooting device..."
+        shutdown -r -t 30
+        Stop-Transcript
+        Exit -1
+    }
+    elseif($exitCode -eq 4)
+    {
+        log "Function $($functionName) failed with non-critical error.  Exiting script with exit code $($exitCode)."
+        Remove-Item -Path $localpath -Recurse -Force -Verbose
+        log "Removed $($localpath)."
+        Stop-Transcript
+        Exit 1
+    }
+    else
+    {
+        log "Function $($functionName) failed with unknown error.  Exiting script with exit code $($exitCode)."
+        Stop-Transcript
+        Exit 1
+    }
+} 
+
 # CMDLET FUNCTIONS
 
 # START SCRIPT FUNCTIONS
@@ -181,7 +221,7 @@ function updateGroupTag()
     Param(
         [string]$regPath = $settings.regPath,
         [string]$regKey = "Registry::$regPath",
-        [string]$groupTag = (Get-ItemPropertyValue -Path $regKey -Name "GroupTag" -ErrorAction Ignore),
+        [string]$groupTag = (Get-ItemPropertyValue -Path $regKey -Name "GroupTag"),
         [string]$aadDeviceID = $aadDeviceID,
         [string]$deviceUri = "https://graph.microsoft.com/beta/devices"
     )
@@ -286,151 +326,162 @@ function removeMigrationUser()
 # START SCRIPT
 
 # get settings
+log "Running FUNCTION: getSettingsJSON..."
 try
 {
     getSettingsJSON
-    log "Retrieved settings"
+    log "FUNCTION: getSettingsJSON completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "Settings not loaded: $message"
+    log "FUNCTION: getSettingsJSON failed: $message"
     log "Exiting script"
-    Exit 1
+    exitScript -exitCode 4 -functionName "getSettingsJSON"
 }
 
 # initialize script
+log "Running FUNCTION: initializeScript..."
 try
 {
     initializeScript
-    log "Script initialized"
+    log "FUNCTION: initializeScript completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "Script not initialized: $message"
+    log "FUNCTION: initializeScript failed: $message"
     log "Exiting script"
-    Exit 1
+    exitScript -exitCode 4 -functionName "initializeScript"
 }
 
 # disable post migrate task
+log "Running FUNCTION: disablePostMigrateTask..."
 try
 {
     disablePostMigrateTask
-    log "Post migrate task disabled"
+    log "FUNCTION: disablePostMigrateTask completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "Post migrate task not disabled: $message"
+    log "FUNCTION: disablePostMigrateTask failed: $message"
     log "Exiting script"
-    Exit 1
+    exitScript -exitCode 4 -functionName "disablePostMigrateTask"
 }
 
 # get device info
+log "Running FUNCTION: getDeviceInfo..."
 try
 {
     getDeviceInfo
-    log "Device info retrieved"
+    log "FUNCTION: getDeviceInfo completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "Device info not retrieved: $message"
+    log "FUNCTION: getDeviceInfo failed: $message"
     log "Exiting script"
-    Exit 1
+    exitScript -exitCode 4 -functionName "getDeviceInfo"
 }
 
 # authenticate to MS Graph
+log "Running FUNCTION: msGraphAuthenticate..."
 try
 {
     msGraphAuthenticate
-    log "MS Graph authenticated"
+    log "FUNCTION: msGraphAuthenticate completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "MS Graph not authenticated: $message"
+    log "FUNCTION: msGraphAuthenticate failed: $message"
     log "Exiting script"
-    Exit 1
+    exitScript -exitCode 4 -functionName "msGraphAuthenticate"
 }
 
 # get graph info
+log "Running FUNCTION: getGraphInfo..."
 try
 {
     getGraphInfo
-    log "Graph info retrieved"
+    log "FUNCTION: getGraphInfo completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "Graph info not retrieved: $message"
+    log "FUNCTION: getGraphInfo failed: $message"
     log "Exiting script"
-    Exit 1
+    exitScript -exitCode 4 -functionName "getGraphInfo"
 }
 
 # set primary user
+log "Running FUNCTION: setPrimaryUser..."
 try
 {
     setPrimaryUser
-    log "Primary user set"
+    log "FUNCTION: setPrimaryUser completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "Primary user not set: $message"
+    log "FUNCTION: setPrimaryUser failed: $message"
     log "WARNING: Primary user not set- try manually setting in Intune"
 }
 
 # update device group tag
+log "Running FUNCTION: updateGroupTag..."
 try
 {
     updateGroupTag
-    log "Device group tag updated if applicable"
+    log "FUNCTION: updateGroupTag completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "Device group tag not updated: $message"
+    log "FUNCTION: updateGroupTag failed: $message"
     log "WARNING: Device group tag not updated- try manually updating in Intune"
 }
 
 # manage bitlocker
+log "Running FUNCTION: manageBitlocker..."
 try
 {
     manageBitlocker
-    log "Bitlocker managed"
+    log "FUNCTION: manageBitlocker completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "Bitlocker not managed: $message"
+    log "FUNCTION: manageBitlocker failed: $message"
     log "WARNING: Bitlocker not managed- try setting policy manually in Intune"
 }
 
 # reset lock screen caption
+log "Running FUNCTION: resetLockScreenCaption..."
 try
 {
     resetLockScreenCaption
-    log "Lock screen caption reset"
+    log "FUNCTION: resetLockScreenCaption completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "Lock screen caption not reset: $message"
+    log "FUNCTION: resetLockScreenCaption failed: $message"
     log "WARNING: Lock screen caption not reset- try setting manually"
 }
 
 # remove migration user
+log "Running FUNCTION: removeMigrationUser..."
 try
 {
     removeMigrationUser
-    log "Migration user removed"
+    log "FUNCTION: removeMigrationUser completed successfully"
 }
 catch
 {
     $message = $_.Exception.Message
-    log "Migration user not removed: $message"
+    log "FUNCTION: removeMigrationUser failed: $message"
     log "WARNING: Migration user not removed- try removing manually"
 }
 
