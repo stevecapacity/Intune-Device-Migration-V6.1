@@ -275,14 +275,62 @@ function getGraphInfo()
         [Parameter(Mandatory=$true)]
         [object[]]$device
     )
-    if($device.mdm -eq $true)
+    $intuneObject = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/beta/deviceManagement/managedDevices?\$filter=serialNumber eq '$($device.serialNumber)'" -Headers $headers
+    if(($intuneObject.'@odata.count') -eq 1)
     {
-        $intuneDevice = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/beta/deviceManagement/managedDevices?\$filter=serialNumber eq '$($device.serialNumber)'" -Headers $headers
         $device += @{
-            intuneDeviceId = $intuneDevice.value.id
-            azureAdDeviceId = $intuneDevice.value.deviceId
+            intuneDeviceId = $intuneObject.value.id
+            azureAdDeviceId = $intuneObject.value.deviceId
         }
-        log "Intune device info retrieved"
+        $autopilotObject = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities?`$filter=contains(serialNumber,'$($device.serialNumber)')" -Headers $headers
+        if(($autopilotObject.'@odata.count') -eq 1)
+        {
+            $device += @{
+                autopilotDeviceId = $autopilotObject.value.id
+            }
+        }
+        else 
+        {
+            log "Autopilot device not found"
+        }
     }
-    return $device   
+    else
+    {
+        log "Device not found in Intune"
+        return $device
+    
+    }
+}
+
+# get group tag 
+# DESCRIPTION: Gets the group tag of the device.
+# USE: getGroupTag -device $device
+# PARAMETER: device - The device object.
+# RETURN: $device - The device object.
+function getGroupTag()
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [object[]]$device,
+        [string]$groupTag = $settings.groupTag
+    )
+    if([string]::IsNullOrEmpty($groupTag))
+    {
+        log "Group tag not found in settings.json - getting from tenant..."
+        if([string]::IsNullOrEmpty($device.autopilotDeviceId))
+        {
+            $autopilotObject = Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities/$($device.autopilotDeviceId)" -Headers $headers
+            $device += @{
+                groupTag = $autopilotObject.groupTag
+            }
+        }
+    }
+    else
+    {
+        $device += @{
+            groupTag = $groupTag
+        }
+        return $device
+    }
 }
