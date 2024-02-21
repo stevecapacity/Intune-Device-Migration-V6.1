@@ -323,3 +323,51 @@ function newDeviceObject()
     }
     return $pc
 }
+
+
+# FUNCTION: newUserObject
+# PURPOSE: Create new user object
+# DESCRIPTION: This function constructs a new user object.  It takes a domain join, user, SID, profile path, and SAM name as input and outputs the user object to the console.
+# INPUTS: $domainJoin (string), $user (string), $SID (string), $profilePath (string), $SAMName (string)
+# OUTPUTS: $userObject (object) | example; @{user=user; SID=SID; profilePath=profilePath; SAMName=SAMName; upn=upn}
+function newUserObject()
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [string]$domainJoin,
+        [Parameter(Mandatory=$true)]
+        [string]$aadJoin,
+        [string]$user = (Get-WmiObject -Class Win32_ComputerSystem | Select-Object UserName).UserName,
+        [string]$SID = (New-Object System.Security.Principal.NTAccount($user)).Translate([System.Security.Principal.SecurityIdentifier]).Value,
+        [string]$profilePath = (Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$($SID)" -Name "ProfileImagePath"),
+        [string]$SAMName = ($user).Split("\")[1]
+    )
+    if($domainJoin -eq "NO")
+    {
+        $upn = (Get-ItemPropertyValue -Path "HKLM:\SOFTWARE\Microsoft\IdentityStore\Cache\$($SID)\IdentityCache\$($SID)" -Name "UserName")
+        if($aadJoin -eq "YES")
+        {
+            $aadId = (Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/beta/users/$($upn)" -Headers $headers).id
+        }
+        else
+        {
+            $aadId = $null
+        }
+    }
+    else
+    {
+        $upn = $null
+        $aadId = $null
+    }
+    $userObject = @{
+        user = $user
+        SID = $SID
+        profilePath = $profilePath
+        SAMName = $SAMName
+        upn = $upn
+        aadId = $aadId
+    }
+    return $userObject
+}
+
