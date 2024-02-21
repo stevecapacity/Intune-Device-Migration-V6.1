@@ -14,5 +14,6 @@
     },
     "groupTag":"<ADD GROUP TAG OR LEAVE EMPTY>",
     "regPath":"HKLM\\SOFTWARE\\IntuneMigration",
-    "bitlockerMethod":"<MIGRATE/DECRYPT>"
+    "bitlockerMethod":"<MIGRATE/DECRYPT>",
+    "lockScreen":"<LOCK SCREEN IMG NAME>"
 }

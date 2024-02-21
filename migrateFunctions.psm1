@@ -127,6 +127,11 @@ function getSettingsJSON
     return $settings
 }
 
+# FUNCTION: initializeScript
+# PURPOSE: Initialize the migration script
+# DESCRIPTION: This function initializes the script.  It takes an install tag, log name, log path, and local path as input and outputs the local path to the console.
+# INPUTS: $installTag (bool), $logName (string), $logPath (string), $localPath (string)
+# OUTPUTS: $localPath (string) | example; C:\ProgramData\IntuneMigration
 function initializeScript()
 {
     [CmdletBinding()]
@@ -164,4 +169,157 @@ function initializeScript()
     log "Running as $($context)."
     log "Script initialized."
     return $localPath
+}
+
+# FUNCTION: copyPackageFiles
+# PURPOSE: Copy package files to local path
+# DESCRIPTION: This function copies the package files to the local path.  It takes a destination as input and outputs the package files to the console.
+# INPUTS: $destination (string) | example; C:\ProgramData\IntuneMigration
+# OUTPUTS: example; Copied file to destination
+function copyPackageFiles()
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [string]$destination
+    )
+    log "Copying package files to $($destination)..."
+    Copy-Item -Path "$($PSScriptRoot)\*" -Destination $destination -Recurse -Force
+    $packageFiles = Get-ChildItem -Path $destination
+    foreach($file in $packageFiles)
+    {
+        if($file)
+        {
+            log "Copied $file to $destination."
+        }
+        else
+        {
+            log "Failed to copy $file to $destination."
+        }
+    }
+}
+
+# FUNCTION: msGraphAuthenticate
+# PURPOSE: Authenticate to Microsoft Graph
+# DESCRIPTION: This function authenticates to Microsoft Graph.  It takes a tenant, client id, and client secret as input and outputs the headers to the console.
+# INPUTS: $tenant (string), $clientId (string), $clientSecret (string)
+# OUTPUTS: $headers (object) | example; @{Authorization=Bearer}
+function msGraphAuthenticate()
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [string]$tenant,
+        [Parameter(Mandatory=$true)]
+        [string]$clientId,
+        [Parameter(Mandatory=$true)]
+        [string]$clientSecret
+    )
+    $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+    $headers.Add("Content-Type", "application/x-www-form-urlencoded")
+
+    $body = "grant_type=client_credentials&scope=https://graph.microsoft.com/.default"
+    $body += -join ("&client_id=" , $clientId, "&client_secret=", $clientSecret)
+
+    $response = Invoke-RestMethod "https://login.microsoftonline.com/$tenant/oauth2/v2.0/token" -Method 'POST' -Headers $headers -Body $body
+
+    #Get Token form OAuth.
+    $token = -join ("Bearer ", $response.access_token)
+
+    #Reinstantiate headers.
+    $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+    $headers.Add("Authorization", $token)
+    $headers.Add("Content-Type", "application/json")
+    log "MS Graph Authenticated"
+    $global:headers = $headers
+}
+
+# FUNCTION: newDeviceObject
+# PURPOSE: Create a new device object
+# DESCRIPTION: This function creates a new device object.  It takes a serial number, hostname, disk size, free space, OS version, OS build, memory, azure ad joined, domain joined, bitlocker, group tag, and mdm as input and outputs the device object to the console.
+# INPUTS: $serialNumber (string), $hostname (string), $diskSize (string), $freeSpace (string), $OSVersion (string), $OSBuild (string), $memory (string), $azureAdJoined (string), $domainJoined (string), $bitLocker (string), $groupTag (string), $mdm (bool)
+# OUTPUTS: $pc (object) | example; @{serialNumber=serialNumber; hostname=hostname; diskSize=diskSize; freeSpace=freeSpace; OSVersion=OSVersion; OSBuild=OSBuild; memory=memory; azureAdJoined=azureAdJoined; domainJoined=domainJoined; bitLocker=bitLocker; groupTag=groupTag; mdm=mdm}
+function newDeviceObject()
+{
+    Param(
+        [string]$serialNumber = (Get-WmiObject -Class Win32_Bios).serialNumber,
+        [string]$hostname = $env:COMPUTERNAME,
+        [string]$diskSize = ([Math]::Round(((Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='C:'").Size / 1GB), 2)).ToString() + " GB",
+        [string]$freeSpace = ([Math]::Round(((Get-WmiObject -Class Win32_LogicalDisk -Filter "DeviceID='C:'").FreeSpace / 1GB), 2)).ToString() + " GB",
+        [string]$OSVersion = (Get-WmiObject -Class Win32_OperatingSystem).Version,
+        [string]$OSBuild = (Get-WmiObject -Class Win32_OperatingSystem).BuildNumber,
+        [string]$memory = ([Math]::Round(((Get-WmiObject -Class Win32_ComputerSystem).TotalPhysicalMemory / 1GB), 2)).ToString() + " GB",
+        [string]$azureAdJoined = (dsregcmd.exe /status | Select-String "AzureAdJoined").ToString().Split(":")[1].Trim(),
+        [string]$domainJoined = (dsregcmd.exe /status | Select-String "DomainJoined").ToString().Split(":")[1].Trim(),
+        [string]$certPath = 'Cert:\LocalMachine\My',
+        [string]$issuer = "Microsoft Intune MDM Device CA",
+        [string]$bitLocker = (Get-BitLockerVolume -MountPoint "C:").ProtectionStatus,
+        [string]$groupTag = $settings.groupTag,
+        [bool]$mdm = $false
+    )
+    $cert = Get-ChildItem -Path $certPath | Where-Object {$_.Issuer -match $issuer}
+    if($cert)
+    {
+        $mdm = $true
+        $intuneObject = (Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/beta/deviceManagement/managedDevices?`$filter=serialNumber eq '$serialNumber'" -Headers $headers)
+        if(($intuneObject.'@odata.count') -eq 1)
+        {
+            $intuneId = $intuneObject.value.id
+            $azureAdDeviceId = (Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/beta/devices?`$filter=deviceId eq '$($intuneObject.value.azureAdDeviceId)'" -Headers $headers).value.id
+            $autopilotObject = (Invoke-RestMethod -Method Get -Uri "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities?`$filter=contains(serialNumber,'$($serialNumber)')" -Headers $headers)
+            if(($autopilotObject.'@odata.count') -eq 1)
+            {
+                $autopilotId = $autopilotObject.value.id
+                if([string]::IsNullOrEmpty($groupTag))
+                {
+                    $groupTag = $autopilotObject.value.groupTag
+                }
+                else
+                {
+                    $groupTag = $groupTag
+                }
+            }
+            else
+            {
+                $autopilotId = $null
+            }
+        }
+        else 
+        {
+            $intuneId = $null
+            $azureAdDeviceId = $null
+        }
+    }
+    else
+    {
+        $intuneId = $null
+        $azureAdDeviceId = $null
+        $autopilotId = $null
+    }
+    if([string]::IsNullOrEmpty($groupTag))
+    {
+        $groupTag = $null
+    }
+    else
+    {
+        $groupTag = $groupTag
+    }
+    $pc = @{
+        serialNumber = $serialNumber
+        hostname = $hostname
+        diskSize = $diskSize
+        freeSpace = $freeSpace
+        OSVersion = $OSVersion
+        OSBuild = $OSBuild
+        memory = $memory
+        azureAdJoined = $azureAdJoined
+        domainJoined = $domainJoined
+        bitLocker = $bitLocker
+        mdm = $mdm
+        intuneId = $intuneId
+        azureAdDeviceId = $azureAdDeviceId
+        autopilotId = $autopilotId
+        groupTag = $groupTag
+    }
+    return $pc
 }
