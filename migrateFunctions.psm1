@@ -371,3 +371,192 @@ function newUserObject()
     return $userObject
 }
 
+# FUNCTION: setReg
+# PURPOSE: Set registry value
+# DESCRIPTION: This function sets a registry value.  It takes a path, name, int value, and string value as input and outputs the status to the console.
+# INPUTS: $path (string), $name (string), $intValue (int), $stringValue (string)
+# OUTPUTS: example; Set name to value in path.
+function setReg ()
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [string]$path,
+        [Parameter(Mandatory=$true)]
+        [string]$name,
+        [Parameter(Mandatory=$false)]
+        [int]$intValue,
+        [Parameter(Mandatory=$false)]
+        [string]$stringValue,
+        [string]$key = "Registry::$path"
+    )
+    if($intValue)
+    {
+        $existingValue = (Get-ItemProperty -Path $path -Name $name -ErrorAction Ignore).$name
+        if($existingValue -eq $intValue)
+        {
+            $status = "Value $name already set to $intValue in $path."
+            log $status
+        }
+        else
+        {
+            reg.exe add $path /v $name /t REG_DWORD /d $intValue /f | Out-Host
+            $status = "Set $name to $intValue in $path."
+            log $status
+        }
+    }
+    elseif($stringValue)
+    {
+        $existingValue = (Get-ItemProperty -Path $path -Name $name -ErrorAction Ignore).$name
+        if($existingValue -eq $stringValue)
+        {
+            $status = "Value $name already set to $stringValue in $path."
+            log $status
+        }
+        else
+        {
+            reg.exe add $path /v $name /t REG_SZ /d $stringValue /f | Out-Host
+            $status = "Set $name to $stringValue in $path."
+            log $status
+        }
+    }
+    else
+    {
+        $status = "No value to set in $path."
+        log $status
+    }
+    return $status
+}
+
+# FUNCTION: getReg
+# PURPOSE: Get registry value
+# DESCRIPTION: This function gets a registry value.  It takes a path and name as input and outputs the value to the console.
+# INPUTS: $path (string), $name (string)
+# OUTPUTS: $value (string) | example; value
+function getReg()
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [string]$path,
+        [Parameter(Mandatory=$true)]
+        [string]$name,
+        [string]$key = "Registry::$path"
+    )
+    $value = (Get-ItemProperty -Path $key -Name $name -ErrorAction Ignore).$name
+    return $value
+}
+
+# FUNCTION: removeMDMEnrollments
+# PURPOSE: Remove MDM enrollments
+# DESCRIPTION: This function removes MDM enrollments.  It takes an enrollment path as input and outputs the status to the console.
+# INPUTS: $enrollmentPath (string) | example; HKLM:\SOFTWARE\Microsoft\Enrollments\
+# OUTPUTS: example; Removed enrollmentPath
+
+function removeMDMEnrollments()
+{
+    Param(
+        [string]$enrollmentPath = "HKLM:\SOFTWARE\Microsoft\Enrollments\"
+    )
+    $enrollments = Get-ChildItem -Path $enrollmentPath
+    foreach ($enrollment in $enrollments) {
+        $object = Get-ItemProperty Registry::$enrollment
+        $enrollPath = $enrollmentPath + $object.PSChildName
+        $key = Get-ItemProperty -Path $enrollPath -Name "DiscoveryServiceFullURL"
+        if($key)
+        {
+            log "Removing $($enrollPath)..."
+            Remove-Item -Path $enrollPath -Recurse -Force
+            $status = "Removed $($enrollPath)."
+            log $status
+        }
+        else
+        {
+            $status = "No MDM enrollment found at $($enrollPath)."
+            log $status
+        }
+    }
+    return $status
+}
+
+# FUNCTION: removeMDMCertificate
+# PURPOSE: Remove MDM certificate
+# DESCRIPTION: This function removes the MDM certificate.  It takes a certificate path and issuer as input and outputs the status to the console.
+# INPUTS: $certPath (string) | example; Cert:\LocalMachine\My, $issuer (string) | example; Microsoft Intune MDM Device CA
+function removeMDMCertificate()
+{
+    Param(
+        [string]$certPath = 'Cert:\LocalMachine\My',
+        [string]$issuer = "Microsoft Intune MDM Device CA"
+    )
+    Get-ChildItem -Path $certPath | Where-Object {$_.Issuer -match $issuer} | Remove-Item -Force
+    log "Removed MDM Certificate"
+}
+
+# FUNCTION: setTask
+# PURPOSE: Set scheduled task
+# DESCRIPTION: This function sets a scheduled task.  It takes a task name and local path as input and outputs the status to the console.
+# INPUTS: $taskName (string), $localPath (string) | example; C:\ProgramData\IntuneMigration
+# OUTPUTS: example; Set taskName
+function setTask()
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [string[]]$taskName,
+        [string]$localPath = $localPath
+    )
+    foreach($task in $taskName)
+    {
+        $taskPath = "$($localPath)\$($task).xml"
+        log "Setting $($task)..."
+        if(Test-Path $taskPath)
+        {
+            schtasks.exe /Create /TN $task /XML $taskPath
+            log "Set $($task)."
+        }
+        else
+        {
+            log "Failed to set $($task)."
+        }
+    }
+}
+
+
+# FUNCTION: leaveAzureADJoin
+# PURPOSE: Leave Azure AD Join
+# DESCRIPTION: This function leaves Azure AD Join.  It takes a dsregcmd as input and outputs the status to the console.
+# INPUTS: $dsregCmd (string) | example; dsregcmd.exe
+function leaveAzureADJoin()
+{
+    Param(
+        [string]$dsregCmd = "dsregcmd.exe"
+    )
+    log "Leaving Azure AD Join..."
+    Start-Process -FilePath $dsregCmd -ArgumentList "/leave"
+    log "Left Azure AD Join."
+}
+
+function unjoinDomain()
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [string]$unjoinAccount
+    )
+    log "Unjoining from domain..."
+    $password = generatePassword -length 12
+    log "Generated password for $unjoinAccount."
+    log "Checking $($unjoinAccount) status..."
+    [bool]$acctStatus = getAccountStatus -localAccount $unjoinAccount
+    if($acctStatus -eq $true)
+    {
+        log "Disabling $($unjoinAccount)..."
+        Disable-LocalUser -Name $unjoinAccount
+        log "Disabled $($unjoinAccount)."
+    }
+    else
+    {
+        log "$($unjoinAccount) is already disabled."
+    }
+}
