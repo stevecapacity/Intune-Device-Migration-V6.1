@@ -119,7 +119,6 @@ function generatePassword {
 # OUTPUTS: $settings (object) | example; @{setting1=value1; setting2=value2}
 function getSettingsJSON
 {
-    [CmdletBinding()]
     Param(
         [string]$json = "settings.json"
     )
@@ -136,7 +135,7 @@ function initializeScript()
 {
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$false)]
         [bool]$installTag,
         [Parameter(Mandatory=$true)]
         [string]$logName,
@@ -324,7 +323,6 @@ function newDeviceObject()
     return $pc
 }
 
-
 # FUNCTION: newUserObject
 # PURPOSE: Create new user object
 # DESCRIPTION: This function constructs a new user object.  It takes a domain join, user, SID, profile path, and SAM name as input and outputs the user object to the console.
@@ -371,10 +369,11 @@ function newUserObject()
     return $userObject
 }
 
+
 # FUNCTION: setReg
 # PURPOSE: Set registry value
 # DESCRIPTION: This function sets a registry value.  It takes a path, name, int value, and string value as input and outputs the status to the console.
-# INPUTS: $path (string), $name (string), $intValue (int), $stringValue (string)
+# INPUTS: $path (string), $name (string), $dValue (int), $sValue (string)
 # OUTPUTS: example; Set name to value in path.
 function setReg ()
 {
@@ -385,38 +384,37 @@ function setReg ()
         [Parameter(Mandatory=$true)]
         [string]$name,
         [Parameter(Mandatory=$false)]
-        [int]$intValue,
+        [int]$dValue,
         [Parameter(Mandatory=$false)]
-        [string]$stringValue,
-        [string]$key = "Registry::$path"
+        [string]$sValue
     )
-    if($intValue)
+    if($dValue)
     {
         $existingValue = (Get-ItemProperty -Path $path -Name $name -ErrorAction Ignore).$name
-        if($existingValue -eq $intValue)
+        if($existingValue -eq $dValue)
         {
-            $status = "Value $name already set to $intValue in $path."
+            $status = "Value $name already set to $dValue in $path."
             log $status
         }
         else
         {
-            reg.exe add $path /v $name /t REG_DWORD /d $intValue /f | Out-Host
-            $status = "Set $name to $intValue in $path."
+            reg.exe add $path /v $name /t REG_DWORD /d $dValue /f | Out-Host
+            $status = "Set $name to $dValue in $path."
             log $status
         }
     }
-    elseif($stringValue)
+    elseif($sValue)
     {
         $existingValue = (Get-ItemProperty -Path $path -Name $name -ErrorAction Ignore).$name
-        if($existingValue -eq $stringValue)
+        if($existingValue -eq $sValue)
         {
-            $status = "Value $name already set to $stringValue in $path."
+            $status = "Value $name already set to $sValue in $path."
             log $status
         }
         else
         {
-            reg.exe add $path /v $name /t REG_SZ /d $stringValue /f | Out-Host
-            $status = "Set $name to $stringValue in $path."
+            reg.exe add $path /v $name /t REG_SZ /d $sValue /f | Out-Host
+            $status = "Set $name to $sValue in $path."
             log $status
         }
     }
@@ -445,6 +443,35 @@ function getReg()
     )
     $value = (Get-ItemProperty -Path $key -Name $name -ErrorAction Ignore).$name
     return $value
+}
+
+# FUNCTION: setRegObject
+# PURPOSE: Set original or new PC or user settings
+# DESCRIPTION: This function sets the original or new PC or user settings.  It takes a name, value, and state as input and outputs the status to the console.
+# INPUTS: $name (string), $value (string), $state (string) (OG, NEW)
+# OUTPUTS: example; Set state_name to value in regPath.
+function setRegObject()
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [string]$name,
+        [Parameter(Mandatory=$true)]
+        [string]$value,
+        [Parameter(Mandatory=$true)]
+        [string]$state,
+        [string]$regPath = $settings.regPath
+    )
+    log "Setting $($state)_$($name) to $value in $regPath."
+    if([string]::IsNullOrEmpty($value))
+    {
+        log "No value to set in $regPath."
+    }
+    else
+    {
+        setReg -path $regPath -name "$($state)_$($name)" -sValue $value
+        log "Set $($state)_$($name) to $value in $regPath."
+    }
 }
 
 # FUNCTION: removeMDMEnrollments
@@ -476,7 +503,31 @@ function removeMDMEnrollments()
             log $status
         }
     }
-    return $status
+    $enrollID = $enrollPath.Split("\")[-1]
+    $additionalPaths = @(
+        "HKLM:\SOFTWARE\Microsoft\Enrollments\Status\$($enrollID)",
+        "HKLM:\SOFTWARE\Microsoft\EnterpriseResourceManager\Tracked\$($enrollID)",
+        "HKLM:\SOFTWARE\Microsoft\PolicyManager\AdmxInstalled\$($enrollID)",
+        "HKLM:\SOFTWARE\Microsoft\PolicyManager\Providers\$($enrollID)",
+        "HKLM:\SOFTWARE\Microsoft\Provinsioning\OMADM\Accounts\$($enrollID)",
+        "HKLM:\SOFTWARE\Microsoft\Provisioning\OMADM\Logger\$($enrollID)",
+        "HKLM:\SOFTWARE\Microsoft\Provisioning\OMADM\Sessions\$($enrollID)"
+    )
+    foreach($path in $additionalPaths)
+    {
+        if(Test-Path $path)
+        {
+            log "Removing $($path)..."
+            Remove-Item -Path $path -Recurse -Force
+            $status = "Removed $($path)."
+            log $status
+        }
+        else
+        {
+            $status = "No MDM enrollment found at $($path)."
+            log $status
+        }
+    }
 }
 
 # FUNCTION: removeMDMCertificate
@@ -522,7 +573,6 @@ function setTask()
     }
 }
 
-
 # FUNCTION: leaveAzureADJoin
 # PURPOSE: Leave Azure AD Join
 # DESCRIPTION: This function leaves Azure AD Join.  It takes a dsregcmd as input and outputs the status to the console.
@@ -537,26 +587,121 @@ function leaveAzureADJoin()
     log "Left Azure AD Join."
 }
 
+# FUNCTION: unjoinDomain
+# PURPOSE: Unjoin from domain
+# DESCRIPTION: This function unjoins from the domain.  It takes an unjoin account and hostname as input and outputs the status to the console.  If the account is disabled, it will enable the account and set the password.  If the account is enabled, it will set the password.
+# INPUTS: $unjoinAccount (string), $hostname (string)
+# OUTPUTS: example; Unjoined from domain
 function unjoinDomain()
 {
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory=$true)]
-        [string]$unjoinAccount
+        [string]$unjoinAccount,
+        [Parameter(Mandatory=$true)]
+        [string]$hostname
     )
     log "Unjoining from domain..."
     $password = generatePassword -length 12
     log "Generated password for $unjoinAccount."
     log "Checking $($unjoinAccount) status..."
     [bool]$acctStatus = getAccountStatus -localAccount $unjoinAccount
-    if($acctStatus -eq $true)
+    if($acctStatus -eq $false)
     {
-        log "Disabling $($unjoinAccount)..."
-        Disable-LocalUser -Name $unjoinAccount
-        log "Disabled $($unjoinAccount)."
+        log "$($unjoinAccount) is disabled; setting password and enabling..."
+        Set-LocalUser -Name $unjoinAccount -Password $password -PasswordNeverExpires $true
+        Get-LocalUser -Name $unjoinAccount | Enable-LocalUser
+        log "Enabled $($unjoinAccount) account and set password."
+    }
+    else 
+    {
+        log "$($unjoinAccount) is enabled; setting password..."
+        Set-LocalUser -Name $unjoinAccount -Password $password -PasswordNeverExpires $true
+        log "Set password for $($unjoinAccount) account."
+    }
+    $cred = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList ("$hostname\$unjoinAccount", $password)
+    log "Unjoining from domain..."
+    Remove-Computer -UnjoinDomainCredential $cred -PassThru -Force -Verbose
+    log "Unjoined from domain."
+}
+
+# FUNCTION: installPPKGPackage
+# PURPOSE: Install provisioning package
+# DESCRIPTION: This function installs the provisioning package that will join the PC to the destination Azure environment.  It takes a local path and PPKG path as input and outputs the status to the console.
+# INPUTS: $localPath (string), $ppkgPath (string)
+# OUTPUTS: example; Installed PPKG package.
+function installPPKGPackage()
+{
+    Param(
+        [string]$localPath = $localPath,
+        [string]$ppkgPath = (Get-ChildItem -Path $localPath -Filter "*.ppkg" -Recurse).FullName
+    )
+    log "Installing PPKG package..."
+    if($ppkgPath)
+    {
+        Install-ProvisioningPackage -PackagePath $ppkgPath -QuietInstall -Force
+        log "Installed PPKG package."
     }
     else
     {
-        log "$($unjoinAccount) is already disabled."
+        log "No PPKG package found."
     }
+}
+
+# FUNCTION: deleteGraphObjects
+# PURPOSE: Delete Intune and Autopilot objects
+# DESCRIPTION: This function deletes the Intune and Autopilot objects from the source Azure environment.  It takes an Intune ID and Autopilot ID as input and outputs the status to the console.
+function deleteGraphObjects()
+{
+    [CmdletBinding()]
+    Param(
+        [string]$intuneId,
+        [string]$autopilotId
+    )
+    if(![string]::IsNullOrEmpty($intuneId))
+    {
+        log "Deleting Intune object..."
+        Invoke-RestMethod -Method Delete -Uri "https://graph.microsoft.com/beta/deviceManagement/managedDevices/$($intuneId)" -Headers $headers
+        log "Deleted Intune object."
+    }
+    else
+    {
+        log "No Intune object found."
+    }
+    if(![string]::IsNullOrEmpty($autopilotId))
+    {
+        log "Deleting Autopilot object..."
+        Invoke-RestMethod -Method Delete -Uri "https://graph.microsoft.com/beta/deviceManagement/windowsAutopilotDeviceIdentities/$($autopilotId)" -Headers $headers
+        log "Deleted Autopilot object."
+    }
+    else
+    {
+        log "No Autopilot object found."
+    }
+}
+
+# FUNCTION: setAutoLogon
+# PURPOSE: Set auto logon
+# DESCRIPTION: This function sets the auto logon to the migration admin account.  It takes a migration admin, auto logon path, auto logon name, auto logon value, default user name, and default password as input and outputs the status to the console.
+function setAutoLogon()
+{
+    Param(
+        [string]$migrationAdmin = "MigrationInProgress",
+        [string]$autoLogonPath = "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon",
+        [string]$autoLogonName = "AutoAdminLogon",
+        [string]$autoLogonValue = 1,
+        [string]$defaultUserName = "DefaultUserName",
+        [string]$defaultPW = "DefaultPassword"
+    )
+    log "Create migration admin account..."
+    $migrationPassword = generatePassword
+    New-LocalUser -Name $migrationAdmin -Password $migrationPassword
+    Add-LocalGroupMember -Group "Administrators" -Member $migrationAdmin
+    log "Migration admin account created: $($migrationAdmin)."
+
+    log "Setting auto logon..."
+    reg.exe add $autoLogonPath /v $autoLogonName /t REG_SZ /d $autoLogonValue /f | Out-Host
+    reg.exe add $autoLogonPath /v $defaultUserName /t REG_SZ /d $migrationAdmin /f | Out-Host
+    reg.exe add $autoLogonPath /v $defaultPW /t REG_SZ /d "@Password*123" /f | Out-Host
+    log "Set auto logon to $($migrationAdmin)."
 }
