@@ -332,9 +332,9 @@ function newUserObject()
 {
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$false)]
         [string]$domainJoin,
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$false)]
         [string]$aadJoin,
         [string]$user = (Get-WmiObject -Class Win32_ComputerSystem | Select-Object UserName).UserName,
         [string]$SID = (New-Object System.Security.Principal.NTAccount($user)).Translate([System.Security.Principal.SecurityIdentifier]).Value,
@@ -438,7 +438,7 @@ function getReg()
         [Parameter(Mandatory=$true)]
         [string]$path,
         [Parameter(Mandatory=$true)]
-        [string]$name,
+        [string[]]$name,
         [string]$key = "Registry::$path"
     )
     $value = (Get-ItemProperty -Path $key -Name $name -ErrorAction Ignore).$name
@@ -570,6 +570,21 @@ function setTask()
         {
             log "Failed to set $($task)."
         }
+    }
+}
+
+function stopTask()
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [string[]]$taskName
+    )
+    foreach($task in $taskName)
+    {
+        log "Disabling $($task)..."
+        Disable-ScheduledTask -TaskName $task
+        log "Disabled $($task)."
     }
 }
 

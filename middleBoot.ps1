@@ -15,7 +15,7 @@ Jesse Weimer
 $ErrorActionPreference = "SilentlyContinue"
 Import-Module "$($PSScriptRoot)\migrateFunctions.psm1"
 
-# Run getSession function to get the settings.json file
+# Run getSettingsJSON function to get the settings.json file
 log "Running FUNCTION: getSettingsJson..."
 try
 {
