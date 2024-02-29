@@ -104,6 +104,52 @@ catch
     exitScript -exitCode 1 -functionName "getMigrateData"
 }
 
+# remove AAD.BrokerPlugin from original user profile
+log "Running FUNCTION: removeAADBrokerPlugin..."
+try
+{
+    removeAADBrokerPlugin -originalProfilePath $migrateData.OG_profilePath
+    log "FUNCTION: removeAADBrokerPlugin completed successfully."
+}
+catch
+{
+    $message = $_.Exception.Message
+    log "FUNCTION: removeAADBrokerPlugin failed - $message."
+    log "Existing script with non critial error.  Please review the log file and attempt to run the script again."
+    exitScript -exitCode 1 -functionName "removeAADBrokerPlugin"
+}
+
+# delete new user profile
+log "Running FUNCTION: deleteUserProfile..."
+try
+{
+    deleteUserProfile -userSID $migrateData.NEW_SID
+    log "FUNCTION: deleteUserProfile completed successfully."
+}
+catch
+{
+    $message = $_.Exception.Message
+    log "FUNCTION: deleteUserProfile failed - $message."
+    log "Existing script with non critial error.  Please review the log file and attempt to run the script again."
+    exitScript -exitCode 1 -functionName "deleteUserProfile"
+}
+
+# change ownership of original user profile to new user
+log "Running FUNCTION: changeProfileOwner..."
+try
+{
+    changeProfileOwner -originalUserSID $migrateData.OG_SID -newUserSID $migrateData.NEW_SID
+    log "FUNCTION: changeProfileOwner completed successfully."
+}
+catch
+{
+    $message = $_.Exception.Message
+    log "FUNCTION: changeProfileOwner failed - $message."
+    log "Existing script with non critial error.  Please review the log file and attempt to run the script again."
+    exitScript -exitCode 1 -functionName "changeProfileOwner"
+}
+
+
 
 
 

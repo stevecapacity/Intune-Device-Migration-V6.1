@@ -591,6 +591,11 @@ function setTask()
     }
 }
 
+# FUNCTION: stopTask
+# PURPOSE: Disable scheduled task
+# DESCRIPTION: This function disables a scheduled task.  It takes a task name as input and outputs the status to the console.
+# INPUTS: $taskName (string) | example; finalBoot
+# OUTPUTS: example; Disabled taskName
 function stopTask()
 {
     [CmdletBinding()]
@@ -766,4 +771,20 @@ function removeAADBrokerPlugin()
         log $status
     }
     return $status
+}
+
+# FUNCTION: deleteNewUserProfile
+# PURPOSE: Delete new user profile
+# DESCRIPTION: This function deletes the new user profile.  It takes a new user SID as input and outputs the status to the console.
+function deleteUserProfile()
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [string]$userSID
+    )
+    log "Deleting new user profile..."
+    $userProfile = Get-CimInstance -ClassName Win32_UserProfile | Where-Object {$_.SID -eq $userSID}
+    Remove-CimInstance -InputObject $userProfile -Verbose | Out-Null
+    log "$($userSID) user profile deleted"
 }
