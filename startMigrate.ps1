@@ -322,12 +322,17 @@ function removeMDMEnrollments()
     foreach($enrollment in $enrollments)
     {
         $object = Get-ItemProperty Registry::$enrollment
-        $discovery = $object."DiscoveryServiceFullURL"
-        if($discovery -eq "https://enrollment.manage.microsoft.com/enrollmentserver/discovery.svc")
+        $enrollPath = $enrollmentPath + $object.PSChildName
+        $key = Get-ItemProperty -Path $enrollPath -Name "DiscoveryServiceFullURL"
+        if($key)
         {
-            $enrollPath = $enrollmentPath + $object.PSChildName
+            log "Removing $($enrollPath)..."
             Remove-Item -Path $enrollPath -Recurse
             log "Removed $($enrollPath)."
+        }
+        else
+        {
+            log "No MDM enrollments found."
         }
     }
     $global:enrollID = $enrollPath.Split("\")[-1]
@@ -342,8 +347,16 @@ function removeMDMEnrollments()
     )
     foreach($path in $additionaPaths)
     {
-        Remove-Item -Path $path -Recurse
-        log "Removed $($path)."
+        if(Test-Path $path)
+        {
+            log "Removing $($path)..."
+            Remove-Item -Path $path -Recurse
+            log "Removed $($path)."
+        }
+        else
+        {
+            log "No additional paths found."
+        }
     }
 }
 
