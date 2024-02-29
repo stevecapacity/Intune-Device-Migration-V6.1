@@ -60,3 +60,81 @@ catch
     exitScript -exitCode 1 -functionName "disableScheduledTask"
 }
 
+log "Running FUNCTION: restoreLogonProvider..."
+try
+{
+    setReg -path "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers\{60b78e88-ead8-445c-9cfd-0b87f74ea6cd}" -name "Disabled" -dValue 0
+    log "FUNCTION: restoreLogonProvider completed successfully."
+}
+catch
+{
+    $message = $_.Exception.Message
+    log "FUNCTION: restoreLogonProvider failed - $message."
+    log "Existing script with non critial error.  Please review the log file and attempt to run the script again."
+    exitScript -exitCode 1 -functionName "restoreLogonProvider"
+}
+
+# disable auto logon policy
+log "Running FUNCTION: setAutoLogonPolicy..."
+try
+{
+    setReg -path "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" -name "AutoAdminLogon" -dValue 0
+    log "FUNCTION: setAutoLogonPolicy completed successfully."
+}
+catch
+{
+    $message = $_.Exception.Message
+    log "FUNCTION: setAutoLogonPolicy failed - $message."
+    log "Existing script with non critial error.  Please review the log file and attempt to run the script again."
+    exitScript -exitCode 1 -functionName "setAutoLogonPolicy"
+}
+
+# retrieve the user and device info from registry
+log "Running FUNCTION: getMigrateData..."
+try
+{
+    getMigrateData
+    log "FUNCTION: getMigrateData completed successfully."
+}
+catch
+{
+    $message = $_.Exception.Message
+    log "FUNCTION: getMigrateData failed - $message."
+    log "Existing script with non critial error.  Please review the log file and attempt to run the script again."
+    exitScript -exitCode 1 -functionName "getMigrateData"
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+######################################################
+# Set lock screen text
+log "Running FUNCTION: setLockScreenCaption..."
+try
+{
+    setReg -path "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -name "legalnoticecaption" -sValue "Welcome to $($settings.targetTenant.tenantName)"
+    setReg -path "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System" -name "legalnoticetext" -sValue "Your PC is now part of $($settings.targetTenant.tenantName).  Please sign in."
+    log "FUNCTION: setLockScreenCaption completed successfully."
+}
+catch
+{
+    $message = $_.Exception.Message
+    log "FUNCTION: setLockScreenCaption failed - $message."
+    log "Existing script with non critial error.  Please review the log file and attempt to run the script again."
+    exitScript -exitCode 1 -functionName "setLockScreenCaption"
+}

@@ -369,6 +369,24 @@ function newUserObject()
     return $userObject
 }
 
+# FUNCTION: getMigrateData
+# PURPOSE: Get migration data from registry
+# DESCRIPTION: This function gets the migration data from the registry.  It takes a registry path, key, and values as input and outputs the migration data to the console.
+# INPUTS: $regPath (string), $regKey (string), $values (array) | example; ("OG_SID", "OG_profilePath", "OG_SAMName", "OG_upn", "NEW_SID", "OG_domainJoined")
+# OUTPUTS: $migrateData (object) | example; @{OG_SID=OG_SID; OG_profilePath=OG_profilePath; OG_SAMName=OG_SAMName; OG_upn=OG_upn; NEW_SID=NEW_SID; OG_domainJoined=OG_domainJoined}
+function getMigrateData()
+{
+    Param(
+        [string]$regPath = $settings.regPath,
+        [string]$regKey = "Registry::$regPath",
+        [array]$values = @("OG_SID", "OG_profilePath", "OG_SAMName", "OG_upn", "NEW_SID", "OG_domainJoined")
+    )
+    $global:migrateData = @{}
+    foreach ($value in $values) {
+        $migrateData[$value] = (Get-ItemProperty -Path $regKey -Name $value -ErrorAction Ignore).$value
+    }
+    return $migrateData
+}
 
 # FUNCTION: setReg
 # PURPOSE: Set registry value
@@ -719,4 +737,33 @@ function setAutoLogon()
     reg.exe add $autoLogonPath /v $defaultUserName /t REG_SZ /d $migrationAdmin /f | Out-Host
     reg.exe add $autoLogonPath /v $defaultPW /t REG_SZ /d "@Password*123" /f | Out-Host
     log "Set auto logon to $($migrationAdmin)."
+}
+
+# FUNCTION: removeAADBrokerPlugin
+# PURPOSE: Remove AAD Broker Plugin
+# DESCRIPTION: This function removes the AAD Broker Plugin from the original profile.  It takes an original profile path and AAD Broker Plugin as input and outputs the status to the console.
+# INPUTS: $originalProfilePath (string), $aadBrokerPlugin (string) | example; Microsoft.AAD.BrokerPlugin_*
+# OUTPUTS: example; Removed AAD Broker Plugin from originalProfilePath.
+function removeAADBrokerPlugin()
+{
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory=$true)]
+        [string]$originalProfilePath,
+        [string]$aadBrokerPlugin = "Microsoft.AAD.BrokerPlugin_*"
+    )
+    log "Removing AAD Broker Plugin from original profile..."
+    $aadBrokerPath = (Get-ChildItem -Path "$($originalProfilePath)\AppData\Local\Packages" -Recurse | Where-Object {$_.Name -match $aadBrokerPlugin} | Select-Object FullName).FullName
+    if([string]::IsNullOrEmpty($aadBrokerPath))
+    {
+        $status = "No AAD Broker Plugin found in $($originalProfilePath)."
+        log $status
+    }
+    else 
+    {
+        Remove-Item -Path $aadBrokerPath -Recurse -Force -ErrorAction SilentlyContinue
+        $status = "Removed AAD Broker Plugin from $($originalProfilePath)."
+        log $status
+    }
+    return $status
 }
