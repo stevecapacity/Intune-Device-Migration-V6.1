@@ -198,7 +198,7 @@ catch
 log "Running FUNCTION: removeMDMEnrollment..."
 try
 {
-    removeMDMEnrollment
+    removeMDMEnrollments
     log "FUNCTION: removeMDMEnrollment completed successfully."
 }
 catch
