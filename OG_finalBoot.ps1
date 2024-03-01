@@ -161,8 +161,10 @@ function getUserInfo()
 # remove AAD.Broker.Plugin from original profile
 function removeAADBrokerPlugin()
 {
+    [CmdletBinding()]
     Param(
-        [string]$originalProfilePath = $OriginalProfilePath,
+        [Parameter(Mandatory=$true)]
+        [string]$originalProfilePath,
         [string]$aadBrokerPlugin = "Microsoft.AAD.BrokerPlugin_*"
     )
     log "Removing AAD.Broker.Plugin from original profile..."
