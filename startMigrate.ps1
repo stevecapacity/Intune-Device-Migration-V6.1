@@ -254,7 +254,7 @@ if($pc.domainJoined -eq "YES")
     log "Device is domain joined.  Running FUNCTION: leaveDomainJoin..."
     try
     {
-        leaveDomainJoin -unjoinAccount "Administrator" -hostname $pc.hostname
+        unjoinDomain -unjoinAccount "Administrator" -hostname $pc.hostname
         log "FUNCTION: leaveDomainJoin completed successfully."
     }
     catch
@@ -272,15 +272,25 @@ else
 
 # Run installPPKGPackage to install provisioning package
 log "Running FUNCTION: installPPKGPackage..."
-try
+$ppkgPath = (Get-ChildItem -Path $localPath -filter "*.ppkg" -recurse).FullName
+if($ppkgPath)
 {
-    installPPKGPackage
-    log "FUNCTION: installPPKGPackage completed successfully."
+    try
+    {
+        Install-ProvisioningPackage -PackagePath $ppkgPath -QuietInstall -Force
+        log "FUNCTION: installPPKGPackage completed successfully."
+    }
+    catch
+    {
+        $message = $_.Exception.Message
+        log "FUNCTION: installPPKGPackage failed - $message."
+        log "Existing script with non critial error.  Please review the log file and attempt to run the script again."
+        exitScript -exitCode 4 -functionName "installPPKGPackage"
+    }
 }
-catch
+else 
 {
-    $message = $_.Exception.Message
-    log "FUNCTION: installPPKGPackage failed - $message."
+    log "No provisioning package found.  Skipping FUNCTION: installPPKGPackage"
     log "Existing script with non critial error.  Please review the log file and attempt to run the script again."
     exitScript -exitCode 4 -functionName "installPPKGPackage"
 }

@@ -663,29 +663,6 @@ function unjoinDomain()
     log "Unjoined from domain."
 }
 
-# FUNCTION: installPPKGPackage
-# PURPOSE: Install provisioning package
-# DESCRIPTION: This function installs the provisioning package that will join the PC to the destination Azure environment.  It takes a local path and PPKG path as input and outputs the status to the console.
-# INPUTS: $localPath (string), $ppkgPath (string)
-# OUTPUTS: example; Installed PPKG package.
-function installPPKGPackage()
-{
-    Param(
-        [string]$localPath = $localPath,
-        [string]$ppkgPath = (Get-ChildItem -Path $localPath -Filter "*.ppkg" -Recurse).FullName
-    )
-    log "Installing PPKG package..."
-    if($ppkgPath)
-    {
-        Install-ProvisioningPackage -PackagePath $ppkgPath -QuietInstall -Force
-        log "Installed PPKG package."
-    }
-    else
-    {
-        log "No PPKG package found."
-    }
-}
-
 # FUNCTION: deleteGraphObjects
 # PURPOSE: Delete Intune and Autopilot objects
 # DESCRIPTION: This function deletes the Intune and Autopilot objects from the source Azure environment.  It takes an Intune ID and Autopilot ID as input and outputs the status to the console.
